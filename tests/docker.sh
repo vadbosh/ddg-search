@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # tests/docker.sh — the installer on clean machines.
 #
-#   bash tests/docker.sh            both stages
+#   bash tests/docker.sh            all three stages
 #   bash tests/docker.sh unit       tests/test_install.sh under bash 3.2
+#   bash tests/docker.sh py310      tests/test_install.sh under Python 3.10
 #   bash tests/docker.sh e2e        a real install, then a real search
 #
 # unit  image bash:3.2 (the bash macOS ships) plus python3: the whole
 #       test_install.sh suite, so a bash 4 construct in a script fails here.
+# py310 image python:3.10-slim: Python without tomllib, so lib/wire.py edits
+#       config.toml with its patterns alone. The suite reads TOML with tomli,
+#       installed there for the tests only; wire.py does not import it.
 # e2e   image ghcr.io/astral-sh/uv:bookworm-slim plus Debian's python3 (3.11):
 #       a fresh HOME with the three assistants' directories and nothing in
 #       them, ./install.sh with the server download, a second run that must
@@ -28,6 +32,15 @@ unit() {
         set -e
         apk add --no-cache python3 >/dev/null
         echo "bash $BASH_VERSION, $(python3 --version)"
+        bash /src/tests/test_install.sh -q'
+}
+
+py310() {
+    echo "== py310: no tomllib"
+    docker run --rm -v "$SRC:/src:ro" python:3.10-slim bash -c '
+        set -e
+        pip install -q --root-user-action=ignore tomli >/dev/null 2>&1
+        echo "$(python3 --version), tomllib: $(python3 -c "import tomllib" 2>/dev/null && echo yes || echo no)"
         bash /src/tests/test_install.sh -q'
 }
 
@@ -53,8 +66,9 @@ e2e() {
 }
 
 case "$STAGE" in
-    unit) unit ;;
-    e2e)  e2e ;;
-    all)  unit; e2e ;;
-    *)    sed -n '2,18p' "$0" | sed -e 's/^# //' -e 's/^#$//'; exit 2 ;;
+    unit)  unit ;;
+    py310) py310 ;;
+    e2e)   e2e ;;
+    all)   unit; py310; e2e ;;
+    *)     awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "$0"; exit 2 ;;
 esac

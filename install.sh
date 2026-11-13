@@ -41,9 +41,14 @@ while [ $# -gt 0 ]; do
         --dry-run)        DRY_RUN=1 ;;
         --no-rule)        WITH_RULE=0 ;;
         --no-server)      WITH_SERVER=0 ;;
-        --ide)            ONLY_IDE="${2:-}"; shift ;;
-        --search-backend) BACKEND="${2:-}"; shift ;;
-        -h|--help)        sed -n '2,26p' "${BASH_SOURCE[0]}" | sed -e 's/^# //' -e 's/^#$//'; exit 0 ;;
+        # A bare `shift` past the last argument would end the script silently
+        # under set -e; say what is missing instead.
+        --ide)            [ $# -ge 2 ] || { echo "--ide needs a value: claude, codex or opencode" >&2; exit 2; }
+                          ONLY_IDE="$2"; shift ;;
+        --search-backend) [ $# -ge 2 ] || { echo "--search-backend needs a value: auto, httpx or curl" >&2; exit 2; }
+                          BACKEND="$2"; shift ;;
+        # The header comment, however long it gets: up to the first code line.
+        -h|--help)        awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0 ;;
         *)                echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -93,9 +98,10 @@ if [ "$WITH_SERVER" -eq 1 ]; then
         fi
         bad "    curl -LsSf https://astral.sh/uv/install.sh | sh"
         bad "  Or ./install.sh --no-server to write the configuration only."
-        exit 1
-    fi
-    if [ "$DRY_RUN" -eq 1 ]; then
+        # --dry-run still shows what the configuration would get.
+        [ "$DRY_RUN" -eq 1 ] || exit 1
+        bad "  --dry-run: going on to the configuration."
+    elif [ "$DRY_RUN" -eq 1 ]; then
         say "    would download it with uvx (and Python 3.12 if uv has none)"
     else
         # Fetches the package, curl_cffi and, when missing, a uv-managed Python

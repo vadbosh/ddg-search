@@ -6,7 +6,8 @@
 #   ./uninstall.sh --ide NAME   only claude, codex or opencode
 #
 # Takes out the ddg-search server entry (active or parked), the rule file and
-# its references. Configuration files are backed up first, to
+# its references. Configuration files, and a rule edited by hand, are backed
+# up first, to
 # ~/.local/state/ddg-search/backups/. uv's cache is left alone: `uv cache clean
 # duckduckgo-mcp-server` removes the downloaded package.
 set -euo pipefail
@@ -15,14 +16,18 @@ tilde() { case "$1" in "$HOME"*) printf '~%s' "${1#"$HOME"}" ;; *) printf '%s' "
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RULE="disable-broken-google-search.md"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/ddg-search"
+STAMP="$(date +%Y%m%d-%H%M%S)"
 DRY_RUN=0
 ONLY_IDE=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1 ;;
-        --ide)     ONLY_IDE="${2:-}"; shift ;;
-        -h|--help) sed -n '2,12p' "${BASH_SOURCE[0]}" | sed -e 's/^# //' -e 's/^#$//'; exit 0 ;;
+        --ide)     [ $# -ge 2 ] || { echo "--ide needs a value: claude, codex or opencode" >&2; exit 2; }
+                   ONLY_IDE="$2"; shift ;;
+        # The header comment, however long it gets: up to the first code line.
+        -h|--help) awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0 ;;
         *)         echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -41,7 +46,15 @@ for ide in claude codex opencode; do
     printf '%s:\n' "$ide"
     if [ -e "$rules/$RULE" ]; then
         if [ "$DRY_RUN" -eq 1 ]; then printf '    would remove %s\n' "$(tilde "$rules/$RULE")"
-        else rm -f "$rules/$RULE"; printf '    - %s\n' "$(tilde "$rules/$RULE")"; fi
+        else
+            # A copy edited by hand is kept, as install.sh keeps what it overwrites.
+            if [ -f "$rules/$RULE" ] && ! cmp -s "$SRC/rules/$RULE" "$rules/$RULE"; then
+                mkdir -p "$STATE/backups" && chmod 700 "$STATE" "$STATE/backups"
+                cp -p "$rules/$RULE" "$STATE/backups/$RULE.bak.$STAMP"
+                printf '    edited copy kept in %s\n' "$(tilde "$STATE/backups/$RULE.bak.$STAMP")"
+            fi
+            rm -f "$rules/$RULE"; printf '    - %s\n' "$(tilde "$rules/$RULE")"
+        fi
     fi
     args=("$ide" --remove)
     [ "$DRY_RUN" -eq 1 ] && args+=(--dry-run)

@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+Fixes from `review-2026-11-13-installer.md`.
+
+- Codex: a `[mcp_servers.ddg-search]` header with a trailing comment or inner
+  spaces, and quoted keys, made the installer write a second table. Codex then
+  failed with "failed to load bootstrap configuration" (A1). Such headers and
+  keys are now recognised. A server written as an inline table is refused
+  (exit 1, file untouched). With Python 3.11 or newer, `config.toml` is parsed
+  before and after the edit, and an edit that would not parse is refused.
+- Codex: variables in an inline `env = { … }` were dropped; they are now
+  moved into the `env` table (A2).
+- A remote entry named `ddg-search` kept its `url` and `type: http`, so the
+  assistant stayed on the URL. Those keys are now dropped (A3).
+- `uninstall.sh` backs up a rule edited by hand before removing it (A4).
+- `--ide` and `--search-backend` without a value exit 2 with a message, not 1
+  in silence (A5).
+- `--dry-run` without uv shows the configuration changes and exits 0 (B1).
+- `--help` of `uninstall.sh` no longer prints a line of code (B2). Both
+  scripts print their header up to the first line of code.
+- The docstring of `lib/wire.py` and both READMEs say that the layout of a
+  file can change (B3).
+- `tests/docker.sh py310`: the suite under Python 3.10, without `tomllib`.
+
 ## 0.1.2 — 2026-11-13
 
 - README: Python 3.12, when uv has none, is downloaded by `./install.sh`

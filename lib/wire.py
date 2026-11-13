@@ -27,10 +27,18 @@ script writes only the configuration:
                                       mcp-tools is kept
 
 The entry named ddg-search is ours: its command, arguments and our one
-environment variable are rewritten to the pinned form below. Any other key in
-it, and every other server, key and line, is left as it was. A configuration
-file is backed up before it is written, outside every directory an assistant
-reads (~/.local/state/ddg-search/backups/).
+environment variable are rewritten to the pinned form below, and the keys of a
+remote server (url, headers, a type other than stdio) are dropped. Any other
+key in it, and every other server and key, keeps its value. The layout does
+not always survive: a JSON file is rewritten whole with two-space indentation,
+and config.toml comes back with LF line endings.
+
+config.toml is edited as text, because Python before 3.11 has no TOML parser.
+Where tomllib exists, the file is parsed first and the result before it is
+written: a file that does not parse, a ddg-search written as an inline table,
+or an edit that would not parse are refused (exit 1, file untouched). A
+configuration file is backed up before it is written, outside every directory
+an assistant reads (~/.local/state/ddg-search/backups/).
 
 Exit codes: 0 done or already current, 3 the assistant is not set up (not an
 error), 4 --check found something to change, 1 a file could not be read or
@@ -160,8 +168,15 @@ def merge_env(old_env, backend):
     return env
 
 
+# Keys of a remote server. An entry named ddg-search is ours, and this installer
+# installs a local one: left in, they would keep the assistant on the URL.
+REMOTE_KEYS = ("url", "headers")
+
+
 def claude_entry(old, backend):
-    entry = dict(old or {})
+    entry = {k: v for k, v in (old or {}).items() if k not in REMOTE_KEYS}
+    if entry.get("type", "stdio") != "stdio":
+        entry.pop("type")
     entry["command"] = COMMAND[0]
     entry["args"] = COMMAND[1:]
     env = merge_env(entry.get("env"), backend)
@@ -173,7 +188,7 @@ def claude_entry(old, backend):
 
 
 def opencode_entry(old, backend):
-    entry = dict(old or {})
+    entry = {k: v for k, v in (old or {}).items() if k not in REMOTE_KEYS}
     entry["type"] = "local"
     entry["command"] = list(COMMAND)
     # Opencode's Code Mode hides MCP tools behind `execute`; with it off they are
@@ -283,22 +298,56 @@ def wire_opencode(backend, with_rule, remove, plan):
 
 # ---------------------------------------------------------------- codex
 
+try:
+    import tomllib          # Python 3.11+. Older: the patterns below are all there is.
+except ImportError:         # pragma: no cover — exercised on 3.8–3.10 only
+    tomllib = None
+
+
 def toml_str(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def section_range(lines, name):
-    """(start, end) of [mcp_servers.<name>] and its sub-tables, or (None, None)."""
-    header = f"[mcp_servers.{name}]"
-    quoted = f'[mcp_servers."{name}"]'
-    prefixes = (f"[mcp_servers.{name}.", f'[mcp_servers."{name}".')
-    start = next((i for i, ln in enumerate(lines) if ln.strip() in (header, quoted)), None)
+def toml_key(k):
+    return k if re.fullmatch(r"[A-Za-z0-9_\-]+", k) else toml_str(k)
+
+
+def toml_value(v):
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return str(v)
+    if isinstance(v, str):
+        return toml_str(v)
+    raise ValueError(f"unsupported value {v!r}")
+
+
+# The server's table header in any spelling TOML allows on one line: bare or
+# quoted name, spaces around the dots and brackets, a trailing comment.
+_NAME = r"""(?:ddg-search|"ddg-search"|'ddg-search')"""
+HEADER_RE = re.compile(r"^\s*\[\s*mcp_servers\s*\.\s*" + _NAME + r"\s*\]\s*(?:#.*)?$")
+SUB_RE = re.compile(r"^\s*\[\s*mcp_servers\s*\.\s*" + _NAME + r"\s*\.\s*([^\]]+?)\s*\]\s*(?:#.*)?$")
+# A key, bare or quoted.
+KEY_RE = re.compile(r"""^\s*(?:"([^"]*)"|'([^']*)'|([A-Za-z0-9_\-]+))\s*=""")
+
+
+def key_of(line):
+    m = KEY_RE.match(line)
+    return next(g for g in m.groups() if g is not None) if m else None
+
+
+def is_table(line):
+    return line.lstrip().startswith("[") and key_of(line) is None
+
+
+def section_range(lines):
+    """(start, end) of [mcp_servers.ddg-search] and its sub-tables, or (None, None)."""
+    start = next((i for i, ln in enumerate(lines) if HEADER_RE.match(ln)), None)
     if start is None:
         return None, None
     end = len(lines)
     for i in range(start + 1, len(lines)):
-        s = lines[i].strip()
-        if s.startswith("[") and not s.startswith(prefixes):
+        if is_table(lines[i]) and not SUB_RE.match(lines[i]):
             end = i
             break
     while end > start + 1 and not lines[end - 1].strip():
@@ -306,61 +355,127 @@ def section_range(lines, name):
     return start, end
 
 
-KEY_RE = re.compile(r"^\s*([A-Za-z0-9_\-]+)\s*=")
+def parse_toml(text, path):
+    """The parsed file, or None where tomllib is missing. A file that does not
+    parse is left alone, as a broken opencode.json is."""
+    if tomllib is None:
+        return None
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise Unreadable(f"{path} is not valid TOML ({exc})")
 
 
-ENV_HEADERS = (f"[mcp_servers.{NAME}.env]", f'[mcp_servers."{NAME}".env]')
+def inline_env(value, path):
+    """The variables of `env = { … }` as a dict."""
+    value = value.strip()
+    if tomllib is not None:
+        try:
+            env = tomllib.loads("v = " + value)["v"]
+        except tomllib.TOMLDecodeError as exc:
+            raise Unreadable(f"{path}: cannot read env of {NAME} ({exc})")
+        if not isinstance(env, dict):
+            raise Unreadable(f"{path}: env of {NAME} is not a table")
+        return env
+    m = re.fullmatch(r"\{(.*)\}\s*(?:#.*)?", value)
+    pair = r"""\s*([A-Za-z0-9_\-]+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*"""
+    if not m or not re.fullmatch(f"(?:{pair},)*(?:{pair})?", m.group(1)):
+        raise Unreadable(f"{path}: cannot read env of {NAME} without Python 3.11 — "
+                         f"move it to an [mcp_servers.{NAME}.env] table")
+    return dict(re.findall(pair, m.group(1)))
 
 
-def codex_section(old_lines, backend):
+def codex_section(old_lines, backend, path):
     """Our section. Kept from the old one: every key of the main table except
-    command, args and env; every variable of the env sub-table except ours;
-    every other sub-table, verbatim. A multi-line array value of a dropped key
-    is dropped whole."""
-    extra, env_extra, subs = [], [], []
+    command, args and env; every variable of env — inline table or sub-table —
+    except ours; every other sub-table, verbatim. A multi-line array value of a
+    dropped key is dropped whole."""
+    extra, env_lines, subs = [], [], []
     where, skipping = "main", False
     for ln in old_lines[1:]:
         s = ln.strip()
         if skipping:
             skipping = "]" not in s
             continue
-        if s.startswith("[") and not KEY_RE.match(ln):
-            where = "env" if s in ENV_HEADERS else "sub"
+        if is_table(ln):
+            m = SUB_RE.match(ln)
+            where = "env" if m and m.group(1).strip("\"'") == "env" else "sub"
             if where == "sub":
                 subs.append(ln)
             continue
-        m = KEY_RE.match(ln)
+        key = key_of(ln)
         if where == "main":
-            if m and m.group(1) in ("command", "args", "env"):
+            if key in ("command", "args", "env"):
                 value = ln.split("=", 1)[1].strip()
+                if key == "env":
+                    for k, v in inline_env(value, path).items():
+                        if k != BACKEND_ENV:
+                            env_lines.append(f"{toml_key(k)} = {toml_value(v)}")
                 skipping = value.startswith("[") and "]" not in value
                 continue
             if s:
                 extra.append(ln)
         elif where == "env":
-            if m and m.group(1) == BACKEND_ENV:
+            if key == BACKEND_ENV:
                 continue
             if s:
-                env_extra.append(ln)
+                env_lines.append(ln)
         else:
             subs.append(ln)
     out = [f"[mcp_servers.{NAME}]",
            f"command = {toml_str(COMMAND[0])}",
            "args = [" + ", ".join(toml_str(a) for a in COMMAND[1:]) + "]"] + extra
-    env_lines = env_extra + [f"{k} = {toml_str(v)}" for k, v in env_for(backend).items()]
+    env_lines += [f"{k} = {toml_str(v)}" for k, v in env_for(backend).items()]
     if env_lines:
-        out += ["", ENV_HEADERS[0]] + env_lines
+        out += ["", f"[mcp_servers.{NAME}.env]"] + env_lines
     if subs:
         out += [""] + subs
     return out
+
+
+TOP_DOTTED_RE = re.compile(r"^\s*mcp_servers\s*\.\s*" + _NAME + r"\s*[.=]")
+IN_TABLE_RE = re.compile(r"^\s*" + _NAME + r"\s*[.=]")
+
+
+def inline_defined(lines):
+    """The server written as a key rather than as its own table:
+    `mcp_servers.ddg-search = {…}` at the top level, or `ddg-search = {…}` /
+    `ddg-search.command = …` inside [mcp_servers]. Found without a parser, so
+    it works on Python 3.8–3.10 too."""
+    table = ""
+    for ln in lines:
+        if is_table(ln):
+            table = re.sub(r"[\s\"']", "", ln.split("]")[0].lstrip(" \t["))
+            continue
+        if (table == "" and TOP_DOTTED_RE.match(ln)) or (table == "mcp_servers" and IN_TABLE_RE.match(ln)):
+            return True
+    return False
+
+
+def codex_lists(path):
+    """True when the file defines the server, in any form."""
+    text = read_text(path)
+    if text is None:
+        return False
+    lines = text.splitlines()
+    if section_range(lines)[0] is not None or inline_defined(lines):
+        return True
+    data = parse_toml(text, path)
+    return data is not None and NAME in data.get("mcp_servers", {})
 
 
 def codex_put(path, backend, remove, plan, create):
     text = read_text(path)
     if text is None and not create:
         return False
+    data = parse_toml(text or "", path)
     lines = (text or "").splitlines()
-    start, end = section_range(lines, NAME)
+    start, end = section_range(lines)
+    if start is None and (inline_defined(lines)
+                          or (data is not None and NAME in data.get("mcp_servers", {}))):
+        raise Unreadable(f"{path} defines {NAME} inline (`{NAME} = {{ … }}` or a dotted key); "
+                         f"the installer edits only a [mcp_servers.{NAME}] table — rewrite it as "
+                         f"one, or remove it, and run again")
     if remove:
         if start is None:
             return False
@@ -370,19 +485,36 @@ def codex_put(path, backend, remove, plan, create):
         while after and not after[0].strip():
             after.pop(0)
         body = before + ([""] if before and after else []) + after
-        plan.put(path, text, "\n".join(body) + ("\n" if body else ""), f"server removed from {tilde(path)}")
-        return True
-    if start is None:
+        new = "\n".join(body) + ("\n" if body else "")
+        what = f"server removed from {tilde(path)}"
+    elif start is None:
         if not create:
             return False
-        section = codex_section([f"[mcp_servers.{NAME}]"], backend)
+        section = codex_section([f"[mcp_servers.{NAME}]"], backend, path)
         body = lines + ([""] if lines and lines[-1].strip() else []) + section
-        plan.put(path, text, "\n".join(body) + "\n", f"server added in {tilde(path)}")
-        return True
-    section = codex_section(lines[start:end], backend)
-    body = lines[:start] + section + lines[end:]
-    plan.put(path, text, "\n".join(body) + "\n", f"server updated in {tilde(path)}")
+        new = "\n".join(body) + "\n"
+        what = f"server added in {tilde(path)}"
+    else:
+        section = codex_section(lines[start:end], backend, path)
+        new = "\n".join(lines[:start] + section + lines[end:]) + "\n"
+        what = f"server updated in {tilde(path)}"
+    check_codex(new, path, remove)
+    plan.put(path, text, new, what)
     return True
+
+
+def check_codex(text, path, remove):
+    """Refuse to write a file Codex could not load. Without tomllib there is no
+    parser to ask, and the patterns above are the only protection."""
+    if tomllib is None:
+        return
+    try:
+        servers = tomllib.loads(text).get("mcp_servers", {})
+    except tomllib.TOMLDecodeError as exc:
+        raise Unreadable(f"{path}: the edit would leave invalid TOML ({exc}) — "
+                         f"file left as it was; please report this")
+    if remove == (NAME in servers) or (not remove and servers[NAME].get("args") != COMMAND[1:]):
+        raise Unreadable(f"{path}: the edit did not come out as intended — file left as it was")
 
 
 def wire_codex(backend, with_rule, remove, plan):
@@ -392,8 +524,7 @@ def wire_codex(backend, with_rule, remove, plan):
         codex_put(CODEX_CONFIG, backend, True, plan, False)
         codex_put(CODEX_PARKED, backend, True, plan, False)
     else:
-        parked_text = read_text(CODEX_PARKED) or ""
-        is_parked = section_range(parked_text.splitlines(), NAME)[0] is not None
+        is_parked = codex_lists(CODEX_PARKED)
         if is_parked:
             codex_put(CODEX_PARKED, backend, False, plan, False)
             plan.lines.append(f"parked in {tilde(CODEX_PARKED)} — {tilde(CODEX_CONFIG)} left alone")

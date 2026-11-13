@@ -91,6 +91,16 @@ If the installer cannot read a configuration file, for example a broken
 `opencode.json`, it does not change that file and exits with code 1. It still
 installs into the other assistants.
 
+The installer edits `config.toml` of Codex as text. It refuses, in the same
+way, when `ddg-search` there is written as an inline table
+(`ddg-search = { … }` under `[mcp_servers]`). Rewrite it as a
+`[mcp_servers.ddg-search]` table, or remove it, and run the installer again.
+With Python 3.11 or newer, the installer also parses the file. It refuses when
+the file does not parse, or would not parse after the edit.
+
+The layout of a file can change. JSON files are written back with two-space
+indentation, and `config.toml` gets LF line endings.
+
 ### Disabled servers
 
 Some setups disable an MCP server by moving its entry to a second file:
@@ -106,19 +116,22 @@ there and does not enable the server. In Opencode it keeps
 ```
 
 The script removes the server entry, the rule and the references to the rule.
-It does not clean uv's cache. To remove the downloaded package, run
+If the rule was edited by hand, the script first copies it to
+`~/.local/state/ddg-search/backups/`. It does not clean uv's cache. To remove the downloaded package, run
 `uv cache clean duckduckgo-mcp-server`.
 
 ## Tests
 
 ```bash
 bash tests/test_install.sh   # a temporary HOME; the real configuration is not touched
-bash tests/docker.sh         # in Docker: the suite under bash 3.2, then a real install
+bash tests/docker.sh         # in Docker: the suite under bash 3.2 and Python 3.10, then a real install
 ```
 
-`tests/docker.sh` has two stages:
+`tests/docker.sh` has three stages:
 
 - `unit`: runs `test_install.sh` under bash 3.2, the version macOS ships.
+- `py310`: runs `test_install.sh` under Python 3.10, which has no `tomllib`.
+  There the installer edits `config.toml` without a parser.
 - `e2e`: on a clean Debian, installs the server and starts it from the entry
   of each assistant. Then it runs one search through MCP and checks that the
   search returns links. This stage needs network access.

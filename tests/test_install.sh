@@ -84,7 +84,10 @@ import json, sys
 path, expr = sys.argv[1], sys.argv[2]
 raw = open(path, encoding="utf-8").read()
 if path.endswith(".toml"):
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:         # Python 3.10 in tests/docker.sh py310; wire.py itself never uses tomli
+        import tomli as tomllib
     d = tomllib.loads(raw)
 else:
     d = json.loads(raw)
@@ -202,22 +205,101 @@ if inst; then no "broken opencode.json fails the run" "exit 0"; else ok "broken 
 check "broken opencode.json left untouched" test "$(cat "$O")" = "{ broken"
 check "others still wired despite one failure" py "$C" "d['mcpServers']['ddg-search']['args'][-1] == '$SPEC'"
 
-if ! PATH=/usr/bin:/bin command -v uvx >/dev/null 2>&1; then
+# A PATH with python3 and the base tools but no uv: python3 may live in
+# /usr/local/bin (python images), which /usr/bin:/bin alone would hide too.
+mkdir -p "$TMP/nouv" && ln -sf "$(command -v python3)" "$TMP/nouv/python3"
+NOUV="$TMP/nouv:/usr/bin:/bin"
+if ! PATH="$NOUV" command -v uvx >/dev/null 2>&1; then
     fresh
     # "$BASH", not bash: the bash:3.2 image keeps it in /usr/local/bin.
-    if HOME="$H" PATH=/usr/bin:/bin "$BASH" "$SRC/install.sh" > "$TMP/out" 2>&1; then
+    if HOME="$H" PATH="$NOUV" "$BASH" "$SRC/install.sh" > "$TMP/out" 2>&1; then
         no "no uv: install refuses" "exit 0"
     else
         ok "no uv: install refuses"
     fi
     check "no uv: says how to get it" grep -q "astral.sh/uv/install.sh" "$TMP/out"
     check "no uv: nothing written" test ! -e "$H/.claude/rules/$RULE"
+    # review 2026-11-13 B1: --dry-run still shows the configuration changes
+    fresh
+    HOME="$H" PATH="$NOUV" "$BASH" "$SRC/install.sh" --dry-run > "$TMP/out" 2>&1
+    check "no uv, --dry-run: exits 0" test $? -eq 0
+    check "no uv, --dry-run: shows the configuration changes" grep -q "would: server updated" "$TMP/out"
+    check "no uv, --dry-run: names the missing uv" grep -q "uv is not installed" "$TMP/out"
 fi
+
+# ---------------------------------------------------------------- codex shapes (review 2026-11-13 A1, A2)
+# codex_shape NAME BODY — config.toml holds BODY, install runs.
+codex_shape() { fresh; printf '%b' "$2" > "$T"; inst "${@:3}"; }
+one_table="len([l for l in open('$T') if l.strip().startswith('[mcp_servers') and 'ddg-search' in l and '.env' not in l]) == 1"
+
+codex_shape T1 '[mcp_servers.ddg-search] # search\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\n'
+check "codex: header with a comment — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][-1] == '$SPEC'"
+check "codex: header with a comment — one table" python3 -c "import sys; sys.exit(0 if $one_table else 1)"
+codex_shape T2 '[mcp_servers.ddg-search]\n"command" = "uvx"\n"args" = ["duckduckgo-mcp-server"]\n'
+check "codex: quoted keys — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][-1] == '$SPEC'"
+codex_shape T6 '[ mcp_servers . "ddg-search" ]\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\n'
+check "codex: spaces and quotes in the header — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][-1] == '$SPEC'"
+codex_shape T3 '[mcp_servers.ddg-search]\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\nenv = { DDG_REGION = "us-en" }\n'
+check "codex: inline env kept" py "$T" "d['mcp_servers']['ddg-search']['env'] == {'DDG_REGION': 'us-en'}"
+codex_shape T3c '[mcp_servers.ddg-search]\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\nenv = { DDG_REGION = "us-en", DDG_SEARCH_BACKEND = "httpx" }\n' --search-backend curl
+check "codex: inline env kept, ours replaced" py "$T" "d['mcp_servers']['ddg-search']['env'] == {'DDG_REGION': 'us-en', 'DDG_SEARCH_BACKEND': 'curl'}"
+before="$(cat "$T")"; inst --search-backend curl
+check "codex: inline env, second run changes nothing" test "$before" = "$(cat "$T")"
+T4='[mcp_servers]\nddg-search = { command = "uvx", args = ["duckduckgo-mcp-server"] }\n'
+codex_shape T4 "$T4"; rc=$?
+check "codex: inline table — refused" test "$rc" -ne 0
+check "codex: inline table — file unchanged" test "$(cat "$T")" = "$(printf '%b' "$T4")"
+check "codex: inline table — says why" grep -q "inline" "$TMP/out"
+check "codex: inline table — other assistants still wired" py "$C" "d['mcpServers']['ddg-search']['args'][-1] == '$SPEC'"
+fresh
+printf '[mcp_servers.ddg-search] # search\ncommand = "uvx"\n\n[features]\nhooks = true\n' > "$T"
+uninst
+check "codex: --remove finds a header with a comment" py "$T" "'mcp_servers' not in d and d['features']['hooks']"
+T4b='model = "m"\nmcp_servers.ddg-search.command = "uvx"\n'
+codex_shape T4b "$T4b"; rc=$?
+check "codex: top-level dotted key — refused" test "$rc" -ne 0
+check "codex: top-level dotted key — file unchanged" test "$(cat "$T")" = "$(printf '%b' "$T4b")"
+fresh
+printf '[features]\nddg-search = true\n' > "$T"
+inst
+check "codex: ddg-search as a key of another table is not the server" py "$T" "d['features']['ddg-search'] is True and d['mcp_servers']['ddg-search']['command'] == 'uvx'"
+# Without tomllib (Python 3.8–3.10) there is no parser to say a file is broken.
+if python3 -c 'import tomllib' 2>/dev/null; then
+    fresh
+    printf 'model = "m"\n[broken\n' > "$T"
+    inst; rc=$?
+    check "codex: unparsable config.toml — refused" test "$rc" -ne 0
+    check "codex: unparsable config.toml — unchanged" test "$(cat "$T")" = "$(printf 'model = "m"\n[broken\n')"
+fi
+
+# ---------------------------------------------------------------- remote entries (review 2026-11-13 A3)
+fresh
+printf '{"mcpServers":{"ddg-search":{"type":"http","url":"https://example.invalid/mcp","headers":{"a":"b"}}}}\n' > "$C"
+python3 - "$O" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); d["mcp"]["ddg-search"] = {"type": "remote", "url": "https://example.invalid/mcp"}
+open(sys.argv[1], "w").write(json.dumps(d))
+PY
+inst
+check "claude: a remote entry becomes a local one" py "$C" "d['mcpServers']['ddg-search'] == {'command': 'uvx', 'args': ['--python', '3.12', '$SPEC']}"
+check "opencode: a remote entry becomes a local one" py "$O" "'url' not in d['mcp']['ddg-search'] and d['mcp']['ddg-search']['type'] == 'local'"
+
+# ---------------------------------------------------------------- flags (review 2026-11-13 A5, B2)
+for opt in --ide --search-backend; do
+    HOME="$H" bash "$SRC/install.sh" --no-server "$opt" > "$TMP/out" 2>&1; rc=$?
+    check "install $opt without a value: exit 2" test "$rc" -eq 2
+    check "install $opt without a value: says so" grep -q "needs a value" "$TMP/out"
+done
+HOME="$H" bash "$SRC/uninstall.sh" --ide > "$TMP/out" 2>&1; rc=$?
+check "uninstall --ide without a value: exit 2" test "$rc" -eq 2
+check "uninstall --help ends on its header" test "$(bash "$SRC/uninstall.sh" --help | tail -1 | cut -c1-3)" != "set"
 
 # ---------------------------------------------------------------- uninstall
 fresh
 inst
+echo "# my note" >> "$H/.claude/rules/$RULE"
 if uninst; then ok "uninstall finishes"; else no "uninstall" "$(tail -5 "$TMP/out")"; fi
+check "uninstall: an edited rule is backed up first (review 2026-11-13 A4)" test "$(grep -l '# my note' "$H"/.local/state/ddg-search/backups/* 2>/dev/null | wc -l | tr -d ' ')" = 1
 check "uninstall: claude entry gone, other kept" py "$C" "'ddg-search' not in d['mcpServers'] and 'other' in d['mcpServers']"
 check "uninstall: codex section gone, rest kept" py "$T" "'ddg-search' not in d['mcp_servers'] and d['features']['hooks']"
 check "uninstall: opencode entry and rule gone" py "$O" "'ddg-search' not in d['mcp'] and len(d['instructions']) == 1"
