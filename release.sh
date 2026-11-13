@@ -71,6 +71,9 @@ check() {
         esac
     done
     [ "$stale" -eq 0 ] || bad=1
+    # Information only: a newer upstream is not a defect of this release, and
+    # an unreachable PyPI must not fail a check made offline.
+    echo "  $(python3 lib/upstream.py 2>&1 | tail -1)"
     if [ "$bad" -eq 0 ]; then echo "  everything agrees on $v"; return 0; fi
     return 3
 }

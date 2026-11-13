@@ -30,9 +30,9 @@ unit() {
     echo "== unit: bash 3.2"
     docker run --rm -v "$SRC:/src:ro" bash:3.2 bash -c '
         set -e
-        apk add --no-cache python3 >/dev/null
+        apk add --no-cache python3 git >/dev/null
         echo "bash $BASH_VERSION, $(python3 --version)"
-        bash /src/tests/test_install.sh -q'
+        bash /src/tests/test_install.sh -q && bash /src/tests/test_update.sh -q'
 }
 
 py310() {
@@ -40,8 +40,9 @@ py310() {
     docker run --rm -v "$SRC:/src:ro" python:3.10-slim bash -c '
         set -e
         pip install -q --root-user-action=ignore tomli >/dev/null 2>&1
+        apt-get update -qq >/dev/null && apt-get install -y -qq git >/dev/null
         echo "$(python3 --version), tomllib: $(python3 -c "import tomllib" 2>/dev/null && echo yes || echo no)"
-        bash /src/tests/test_install.sh -q'
+        bash /src/tests/test_install.sh -q && bash /src/tests/test_update.sh -q'
 }
 
 e2e() {

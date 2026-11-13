@@ -142,13 +142,14 @@ If the rule was edited by hand, the script first copies it to
 
 ```bash
 bash tests/test_install.sh   # a temporary HOME; the real configuration is not touched
-bash tests/docker.sh         # in Docker: the suite under bash 3.2 and Python 3.10, then a real install
+bash tests/test_update.sh    # update.sh on a copy of the checkout, PyPI replaced by a file
+bash tests/docker.sh         # in Docker: both suites under bash 3.2 and Python 3.10, then a real install
 ```
 
 `tests/docker.sh` has three stages:
 
-- `unit`: runs `test_install.sh` under bash 3.2, the version macOS ships.
-- `py310`: runs `test_install.sh` under Python 3.10, which has no `tomllib`.
+- `unit`: runs both suites under bash 3.2, the version macOS ships.
+- `py310`: runs both suites under Python 3.10, which has no `tomllib`.
   There the installer edits `config.toml` without a parser.
 - `e2e`: on a clean Debian, installs the server and starts it from the entry
   of each assistant. Then it runs one search through MCP and checks that the
@@ -156,6 +157,34 @@ bash tests/docker.sh         # in Docker: the suite under bash 3.2 and Python 3.
 
 `tests/mcp_probe.py claude` runs the same search check against the
 configuration on this machine.
+
+## Updating the server
+
+`./release.sh check` also asks PyPI for the newest
+`duckduckgo-mcp-server`. When it is newer than the pinned version, the check
+prints, for example:
+
+```
+upstream:     0.8.0 on PyPI, pinned 0.7.0 — ./update.sh
+```
+
+This line is information only: it does not change the exit code, and
+without network access it says `not checked`.
+
+`./update.sh` moves the pin to the newest version, or to the one you name
+(`./update.sh 0.8.0`). It does these steps in order:
+
+1. It stops if the working tree has uncommitted changes.
+2. It stops if that version no longer declares the `[browser]` extra.
+3. It sets `VERSION` in `lib/wire.py`.
+4. It runs `tests/test_install.sh` and, unless `--no-docker` is given,
+   `tests/docker.sh e2e`: the new server on a clean Debian, one real search
+   through MCP per assistant.
+5. It adds the change to `## Unreleased` in `CHANGELOG.md`.
+
+If a step fails, it puts the old version back. It does not commit, tag or
+install. After it, review `git diff`, release, and run `./install.sh` on
+each machine.
 
 ## Release
 

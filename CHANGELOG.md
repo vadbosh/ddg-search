@@ -10,6 +10,13 @@
   `uninstall.sh` and `--keep-codex-search` put both back. A state file written
   by 0.2.0 is still read.
 - The rule names `codex_apps.search_service.web_run` too.
+- Following upstream: `./release.sh check` prints whether PyPI has a newer
+  `duckduckgo-mcp-server` than the pin (information only; `not checked`
+  offline). `./update.sh [VERSION]` moves the pin after checking that the
+  version still has the `[browser]` extra, runs the tests and, unless
+  `--no-docker`, a real install and search in Docker, then adds the change to
+  `## Unreleased`. Any failure puts the old pin back. New suite:
+  `tests/test_update.sh`.
 
 ## 0.2.1 — 2026-11-13
 
