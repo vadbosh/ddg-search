@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- README: Python 3.12, when uv has none, is downloaded by `./install.sh`
+  together with the server, not on the first start in an assistant. The
+  DuckDuckGo answer to `curl_cffi` is named for what it is, a bot-check page.
+  The Russian version had several sentences rewritten for clarity.
+
 ## 0.1.1 — 2026-11-13
 
 - The repository is public: https://github.com/vadbosh/ddg-search. Both

@@ -34,7 +34,8 @@ The server version changes only with a release of this repository. It is
 
 - python3, version 3.8 or newer: the installer edits the configuration with it
 - [uv](https://docs.astral.sh/uv/): the assistants start the server with
-  `uvx`. If uv has no Python 3.12, `uvx` downloads it on the first run
+  `uvx`. If uv has no Python 3.12, `./install.sh` downloads it together with
+  the server
 
 Without uv, `./install.sh` stops and prints the install command for uv.
 
@@ -59,9 +60,9 @@ servers only at start.
 
 `auto` sends a search through httpx first and repeats it through `curl_cffi`
 when DuckDuckGo blocks it. `curl` sends every search through `curl_cffi` at
-once. On 2026-11-13, DuckDuckGo answered httpx with HTTP 200. It answered the
-Chrome fingerprint of `curl_cffi` with HTTP 202, an anomaly page, from the
-second search on. The server reports such a page as "No results"
+once. On 2026-11-13, DuckDuckGo answered httpx with HTTP 200. From the second
+search on, it answered the Chrome fingerprint of `curl_cffi` with HTTP 202 and
+a bot-check page. The server reports such a page as "No results"
 ([issue #78](https://github.com/nickclyde/duckduckgo-mcp-server/issues/78)).
 For this reason, `auto` is the default.
 
