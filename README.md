@@ -59,8 +59,11 @@ servers only at start.
 
 `auto` sends a search through httpx first and repeats it through `curl_cffi`
 when DuckDuckGo blocks it. `curl` sends every search through `curl_cffi` at
-once. On 2026-11-13, in 3 of 3 runs, the first `curl` search from a new
-process returned no results, so `auto` is the default.
+once. On 2026-11-13, DuckDuckGo answered httpx with HTTP 200. It answered the
+Chrome fingerprint of `curl_cffi` with HTTP 202, an anomaly page, from the
+second search on. The server reports such a page as "No results"
+([issue #78](https://github.com/nickclyde/duckduckgo-mcp-server/issues/78)).
+For this reason, `auto` is the default.
 
 The installer is idempotent: a second run changes nothing. Before it
 overwrites a file, it copies the file to `~/.local/state/ddg-search/backups/`.

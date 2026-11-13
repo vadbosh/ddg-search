@@ -11,8 +11,10 @@ First release. Before it, the ddg-search MCP entry and the rule
 - The `[browser]` extra is always installed. Without it, DuckDuckGo blocks the
   httpx TLS fingerprint and every search returns "No results were found".
 - The search backend stays `auto` by default. `--search-backend curl` is
-  available, but on 2026-11-13 the first `curl` search from a new process
-  returned no results in 3 of 3 runs.
+  available, but on 2026-11-13 DuckDuckGo answered the Chrome fingerprint of
+  `curl_cffi` with an HTTP 202 anomaly page from the second search on, while
+  httpx got HTTP 200. The server reports that page as "No results"
+  ([upstream issue #78](https://github.com/nickclyde/duckduckgo-mcp-server/issues/78)).
 - Disabled servers stay disabled: an entry in `~/.claude/mcp-disabled.json` or
   `~/.codex/mcp-disabled.toml` is updated in that file, and Opencode keeps
   `"enabled": false`.
