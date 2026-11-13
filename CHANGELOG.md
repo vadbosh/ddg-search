@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-13
 
 - The server runs with `--fetch-backend auto`: `fetch_content` repeats a page
   request through `curl_cffi` when the site answers httpx with 403 or a
