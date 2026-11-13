@@ -24,11 +24,17 @@ blocked search with the TLS fingerprint of Chrome. This installer always
 installs the extra and pins the server version:
 
 ```
-uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0
+uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0 --fetch-backend auto
 ```
 
 The server version changes only with a release of this repository. It is
 `VERSION` in `lib/wire.py`.
+
+`--fetch-backend auto` does the same for pages. By default the server fetches
+a page with httpx only. With `auto`, it repeats the request through
+`curl_cffi` when the site answers with 403 or a Cloudflare challenge. On
+2026-11-13, `extension.umn.edu` answered httpx with 403 and returned the page
+(2381 characters) to `auto`.
 
 ## Requirements
 

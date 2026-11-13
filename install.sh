@@ -93,7 +93,7 @@ install_file() {
 }
 
 # ---------------------------------------------------------------- the server
-SPEC="$(python3 "$SRC/lib/wire.py" spec | tail -1)"
+SPEC="$(python3 "$SRC/lib/wire.py" package)"
 if [ "$WITH_SERVER" -eq 1 ]; then
     say "server: $SPEC"
     if ! command -v uvx >/dev/null 2>&1; then

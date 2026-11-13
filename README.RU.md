@@ -24,11 +24,17 @@ Extra `[browser]` ставит `curl_cffi`. С ним сервер повтор�
 фиксирует версию сервера:
 
 ```
-uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0
+uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0 --fetch-backend auto
 ```
 
 Версия сервера меняется только с релизом этого репозитория. Она задана
 константой `VERSION` в `lib/wire.py`.
+
+`--fetch-backend auto` делает то же для страниц. По умолчанию сервер
+загружает страницу только через httpx. С `auto` он повторяет запрос через
+`curl_cffi`, если сайт ответил кодом 403 или проверкой Cloudflare. 2026-11-13
+`extension.umn.edu` ответил httpx кодом 403, а через `auto` отдал страницу
+(2381 знак).
 
 ## Что нужно
 

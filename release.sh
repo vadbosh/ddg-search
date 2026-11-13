@@ -34,7 +34,7 @@ check() {
     local v bad=0 n=0 stale=0 ide rc
     v="$(version)"
     if [ -z "$v" ]; then echo "  version:      none — no '## X.Y.Z — date' heading in CHANGELOG.md"; return 3; fi
-    echo "  version:      $v (CHANGELOG.md), server $(python3 lib/wire.py spec | tail -1)"
+    echo "  version:      $v (CHANGELOG.md), server $(python3 lib/wire.py package)"
     if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
         echo "  git tag:      v$v exists"
         local since

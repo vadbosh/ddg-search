@@ -69,7 +69,12 @@ PACKAGE = "duckduckgo-mcp-server"
 # of this repository, not on whatever day uvx resolves it.
 VERSION = "0.7.0"
 PYTHON = "3.12"
-COMMAND = ["uvx", "--python", PYTHON, f"{PACKAGE}[browser]=={VERSION}"]
+SERVER = f"{PACKAGE}[browser]=={VERSION}"
+# --fetch-backend auto: fetch_content retries through curl_cffi (Chrome TLS) when a
+# site answers httpx with 403 or a Cloudflare challenge. The server default is
+# httpx alone; measured 2026-11-13, extension.umn.edu gave httpx a 403 and auto
+# the page (2381 characters).
+COMMAND = ["uvx", "--python", PYTHON, SERVER, "--fetch-backend", "auto"]
 BACKEND_ENV = "DDG_SEARCH_BACKEND"
 BACKENDS = ("auto", "httpx", "curl")
 
@@ -727,6 +732,9 @@ def tilde(path):
 
 
 def main(argv):
+    if argv[:1] == ["package"]:
+        print(SERVER)
+        return 0
     if argv[:1] == ["spec"]:
         print("\n".join(COMMAND))
         return 0

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The server runs with `--fetch-backend auto`: `fetch_content` repeats a page
+  request through `curl_cffi` when the site answers httpx with 403 or a
+  Cloudflare challenge. The server default is httpx alone. Measured on
+  2026-11-13: `extension.umn.edu` gave httpx 403 and `auto` the page. All three
+  assistants get the new arguments with `./install.sh`. `lib/wire.py package`
+  prints the package spec, which `install.sh` and `release.sh` now use.
 - Codex: after 0.2.0 turned `web_search` off, Codex still searched through
   `codex_apps.search_service.web_run` — the same `web.run`, reaching the model
   as an app, which `web_search` does not control. The installer now also adds
