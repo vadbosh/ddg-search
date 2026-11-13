@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 — 2026-11-13
 
 Fixes from `review-2026-11-13-installer.md`.
 
