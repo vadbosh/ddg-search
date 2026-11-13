@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-11-13
 
 - Codex: the server entry gets `default_tools_approval_mode = "approve"`.
   Without it Codex asked for permission before every `search` and every
