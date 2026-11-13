@@ -89,10 +89,14 @@ read.
 
 Codex has its own web search tool, `web.run`, and it is on by default. With
 it available, Codex searched through `web.run` and not through ddg-search,
-although the rule forbids it. So the installer also sets
-`web_search = "disabled"` at the top of `~/.codex/config.toml`. It saves the
-value it replaced in `~/.local/state/ddg-search/codex-web-search`, and
-`./uninstall.sh` puts that value back. To keep the built-in search on, run
+although the rule forbids it. The same tool also reaches the model as an app,
+`codex_apps.search_service.web_run`, which `web_search` does not control. So
+the installer also sets `web_search = "disabled"` at the top of
+`~/.codex/config.toml` and adds `[apps.connector_openai_search_service]` with
+`enabled = false`. It turns off this one app only, not the other Codex apps.
+It saves the values it replaced in
+`~/.local/state/ddg-search/codex-web-search`, and `./uninstall.sh` puts them
+back. To keep the built-in search on, run
 `./install.sh --keep-codex-search`. If ddg-search is disabled in Codex, the
 installer leaves the built-in search on.
 

@@ -301,11 +301,28 @@ WS="$H/.local/state/ddg-search/codex-web-search"
 fresh
 inst
 check "web search: turned off at the top level" py "$T" "d['web_search'] == 'disabled' and d['model'] == 'gpt'"
-check "web search: state says it was unset" test "$(cat "$WS")" = "set previous=absent"
+check "web search: state says both were unset" test "$(cat "$WS")" = "$(printf 'web previous=absent\napp previous=absent')"
 check "web search: written before the first table" test "$(grep -n '^web_search' "$T" | cut -d: -f1)" -lt "$(grep -n '^\[' "$T" | head -1 | cut -d: -f1)"
+check "web search: search_service app turned off" py "$T" "d['apps']['connector_openai_search_service'] == {'enabled': False}"
+before="$(cat "$T")"; inst
+check "web search: second run changes nothing" test "$before" = "$(cat "$T")"
 uninst
 check "web search: uninstall removes the key it added" py "$T" "'web_search' not in d and d['model'] == 'gpt'"
+check "web search: uninstall removes the app table it added" py "$T" "'apps' not in d"
 check "web search: uninstall drops the state" test ! -e "$WS"
+
+fresh
+printf '%s\n\n[apps.connector_openai_search_service]\nenabled = true\ndefault_tools_approval_mode = "approve"\n' "$(cat "$T")" > "$T"
+inst
+check "web search: an enabled app is turned off, its other keys kept" py "$T" "d['apps']['connector_openai_search_service'] == {'enabled': False, 'default_tools_approval_mode': 'approve'}"
+uninst
+check "web search: uninstall puts enabled = true back" py "$T" "d['apps']['connector_openai_search_service']['enabled'] is True"
+
+fresh
+mkdir -p "$(dirname "$WS")"; printf 'set previous=absent\n' > "$WS"
+printf 'web_search = "disabled"\n%s' "$(cat "$T")" > "$T"
+inst; uninst
+check "web search: a 0.2.0 state file is still understood" py "$T" "'web_search' not in d and 'apps' not in d"
 
 fresh
 printf 'web_search = "live"\n%s' "$(cat "$T")" > "$T"
@@ -322,12 +339,12 @@ check "web search: off by the user stays off after uninstall" py "$T" "d['web_se
 fresh
 printf 'web_search = "live"\n%s' "$(cat "$T")" > "$T"
 inst --keep-codex-search
-check "web search: --keep-codex-search leaves it on" py "$T" "d['web_search'] == 'live'"
+check "web search: --keep-codex-search leaves it on" py "$T" "d['web_search'] == 'live' and 'apps' not in d"
 check "web search: --keep-codex-search is recorded" test "$(cat "$WS")" = "kept"
 inst
 check "web search: a later plain install turns it off" py "$T" "d['web_search'] == 'disabled'"
 inst --keep-codex-search
-check "web search: --keep-codex-search after that restores live" py "$T" "d['web_search'] == 'live'"
+check "web search: --keep-codex-search after that restores live" py "$T" "d['web_search'] == 'live' and 'apps' not in d"
 
 fresh
 printf '[features]\nhooks = true\n' > "$T"
@@ -338,7 +355,7 @@ fresh
 mv "$T" "$H/.codex/mcp-disabled.toml"
 printf 'model = "gpt"\n' > "$T"
 inst
-check "web search: parked ddg-search — built-in search left on" py "$T" "'web_search' not in d"
+check "web search: parked ddg-search — built-in search left on" py "$T" "'web_search' not in d and 'apps' not in d"
 
 # ---------------------------------------------------------------- uninstall
 fresh

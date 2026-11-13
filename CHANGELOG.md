@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Codex: after 0.2.0 turned `web_search` off, Codex still searched through
+  `codex_apps.search_service.web_run` — the same `web.run`, reaching the model
+  as an app, which `web_search` does not control. The installer now also adds
+  `[apps.connector_openai_search_service]` with `enabled = false`, only for
+  this app. The previous value is saved with the `web_search` one, and
+  `uninstall.sh` and `--keep-codex-search` put both back. A state file written
+  by 0.2.0 is still read.
+- The rule names `codex_apps.search_service.web_run` too.
+
 ## 0.2.1 — 2026-11-13
 
 - Codex: the server entry gets `default_tools_approval_mode = "approve"`.

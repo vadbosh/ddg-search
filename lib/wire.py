@@ -17,9 +17,11 @@ script writes only the configuration:
                                       updated instead of mcp.json when the
                                       server is parked there (mcp-tools)
   codex     ~/.codex/config.toml      [mcp_servers.ddg-search], and the
-                                      top-level web_search = "disabled": Codex's
-                                      own search tool (web.run) off, the value
-                                      it replaced kept in
+                                      top-level web_search = "disabled" and
+                                      [apps.connector_openai_search_service]
+                                      enabled = false: Codex's own search
+                                      (web.run, as a tool and as an app) off,
+                                      the values replaced kept in
                                       ~/.local/state/ddg-search/codex-web-search
                                       for --remove; --keep-codex-search leaves
                                       it on, and so does a parked server
@@ -564,65 +566,141 @@ WEB_SEARCH_RE = re.compile(r"""^\s*(?:web_search|"web_search"|'web_search')\s*=\
 DISABLED = '"disabled"'
 
 
+# The same web.run also reaches the model as an app: with [features] apps on
+# (the default), Codex exposes the connector below as
+# codex_apps.search_service.web_run, and web_search = "disabled" does not touch
+# it. Seen 2026-11-13, after web_search had been turned off. Only this one app
+# is turned off — [features] apps = false would take every other app with it.
+APP_ID = "connector_openai_search_service"
+_APP = f"(?:{APP_ID}|\"{APP_ID}\"|'{APP_ID}')"
+APP_HEADER_RE = re.compile(r"^\s*\[\s*apps\s*\.\s*" + _APP + r"\s*\]\s*(?:#.*)?$")
+ENABLED_RE = re.compile(r"""^\s*(?:enabled|"enabled"|'enabled')\s*=\s*(.*?)\s*(?:#.*)?$""")
+
+
+def _web_find(lines):
+    top_end = next((i for i, ln in enumerate(lines) if is_table(ln)), len(lines))
+    at = next((i for i in range(top_end) if WEB_SEARCH_RE.match(lines[i])), None)
+    return top_end, at, (WEB_SEARCH_RE.match(lines[at]).group(1) if at is not None else None)
+
+
+def _app_find(lines):
+    start = next((i for i, ln in enumerate(lines) if APP_HEADER_RE.match(ln)), None)
+    if start is None:
+        return None, None, None, None
+    end = next((i for i in range(start + 1, len(lines)) if is_table(lines[i])), len(lines))
+    at = next((i for i in range(start + 1, end) if ENABLED_RE.match(lines[i])), None)
+    return start, end, at, (ENABLED_RE.match(lines[at]).group(1) if at is not None else None)
+
+
+def read_search_state():
+    """{"kept": True}, or {"web": prev, "app": prev} for what an install changed.
+    `set previous=…` is the one-line form written by 0.2.0."""
+    text = (read_text(WEB_SEARCH_STATE) or "").strip()
+    if text == "kept":
+        return {"kept": True}
+    state = {}
+    for ln in text.splitlines():
+        key, _, value = ln.partition(" previous=")
+        if key in ("set", "web"):
+            state["web"] = value
+        elif key == "app":
+            state["app"] = value
+    return state
+
+
 def codex_web_search(plan, restore, keep=False):
-    """Set, or restore, the top-level web_search of config.toml."""
+    """Turn Codex's own search off in config.toml — the web_search key and the
+    search_service app — or put back what an earlier run replaced."""
     original = read_text(CODEX_CONFIG)
     base = plan.writes.get(CODEX_CONFIG, original)
     if base is None:
         return
     lines = base.splitlines()
-    top_end = next((i for i, ln in enumerate(lines) if is_table(ln)), len(lines))
-    at = next((i for i in range(top_end) if WEB_SEARCH_RE.match(lines[i])), None)
-    current = WEB_SEARCH_RE.match(lines[at]).group(1) if at is not None else None
-    state = read_text(WEB_SEARCH_STATE)
-    state = state.strip() if state else None
+    state = read_search_state()
+    done = []
 
     if restore:
-        new_state = "kept" if keep else None
-        if state and state.startswith("set previous=") and current == DISABLED:
-            previous = state[len("set previous="):]
+        _, at, current = _web_find(lines)
+        previous = state.get("web")
+        if previous and current == DISABLED:
             if previous == "absent":
                 del lines[at]
             else:
                 lines[at] = f"web_search = {previous}"
-            what = (f"built-in web search: web_search {'restored to ' + previous if previous != 'absent' else 'key removed'} "
-                    f"in {tilde(CODEX_CONFIG)}")
-            plan.put(CODEX_CONFIG, original, "\n".join(lines) + "\n", what)
-        plan.put(WEB_SEARCH_STATE, read_text(WEB_SEARCH_STATE),
-                 None if new_state is None else new_state + "\n", "")
+            done.append("web_search " + ("removed" if previous == "absent" else f"back to {previous}"))
+        start, end, at, current = _app_find(lines)
+        previous = state.get("app")
+        if previous and current == "false":
+            if previous == "absent":
+                while start > 0 and not lines[start - 1].strip():
+                    start -= 1
+                del lines[start:end]
+            elif previous == "unset":
+                del lines[at]
+            else:
+                lines[at] = f"enabled = {previous}"
+            done.append(f"[apps.{APP_ID}] " + ("removed" if previous == "absent" else "restored"))
+        if done:
+            plan.put(CODEX_CONFIG, base, "\n".join(lines) + "\n",
+                     f"built-in web search back on: {'; '.join(done)} in {tilde(CODEX_CONFIG)}")
+        plan.put(WEB_SEARCH_STATE, read_text(WEB_SEARCH_STATE), "kept\n" if keep else None, "")
         if keep:
             plan.lines.append("built-in web search: left on (--keep-codex-search)")
         return
 
-    if current == DISABLED:
-        # Already off — by us (state says so) or by the user (no state: then it
-        # stays off after --remove too, as they had it).
-        return
-    new_line = f"web_search = {DISABLED}"
-    if at is not None:
-        lines[at] = new_line
-    else:
-        # The top level ends at the first table; keys after it would belong to it.
-        insert = top_end
-        while insert > 0 and not lines[insert - 1].strip():
-            insert -= 1
-        block = [new_line]
-        if insert == top_end and top_end < len(lines):
-            block.append("")        # right before a table header: keep a blank line between
-        lines[insert:insert] = block
-    new = "\n".join(lines) + "\n"
-    if tomllib is not None:
-        try:
-            if tomllib.loads(new).get("web_search") != "disabled":
-                raise Unreadable(f"{CODEX_CONFIG}: web_search did not come out as \"disabled\" — file left as it was")
-        except tomllib.TOMLDecodeError as exc:
-            raise Unreadable(f"{CODEX_CONFIG}: setting web_search would leave invalid TOML ({exc}) — "
-                             f"file left as it was")
-    plan.put(CODEX_CONFIG, base, new,
-             f"built-in web search: web_search = \"disabled\" in {tilde(CODEX_CONFIG)} "
-             f"(was {current if current is not None else 'unset'})")
+    new_state = {}
+    top_end, at, current = _web_find(lines)
+    if current != DISABLED:
+        new_line = f"web_search = {DISABLED}"
+        if at is not None:
+            lines[at] = new_line
+        else:
+            # The top level ends at the first table; keys after it would belong to it.
+            insert = top_end
+            while insert > 0 and not lines[insert - 1].strip():
+                insert -= 1
+            block = [new_line]
+            if insert == top_end and top_end < len(lines):
+                block.append("")        # right before a table header: keep a blank line between
+            lines[insert:insert] = block
+        new_state["web"] = current if current is not None else "absent"
+        done.append(f"web_search = \"disabled\" (was {current if current is not None else 'unset'})")
+    elif "web" in state:
+        new_state["web"] = state["web"]
+    # Already off with no record means the user turned it off: it stays off
+    # after --remove too, as they had it.
+
+    start, end, at, current = _app_find(lines)
+    if start is None:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines += [f"[apps.{APP_ID}]", "enabled = false"]
+        new_state["app"] = "absent"
+        done.append(f"[apps.{APP_ID}] enabled = false")
+    elif current != "false":
+        if at is None:
+            lines.insert(start + 1, "enabled = false")
+        else:
+            lines[at] = "enabled = false"
+        new_state["app"] = current if current is not None else "unset"
+        done.append(f"[apps.{APP_ID}] enabled = false (was {current if current is not None else 'unset'})")
+    elif "app" in state:
+        new_state["app"] = state["app"]
+
+    if done:
+        new = "\n".join(lines) + "\n"
+        if tomllib is not None:
+            try:
+                parsed = tomllib.loads(new)
+            except tomllib.TOMLDecodeError as exc:
+                raise Unreadable(f"{CODEX_CONFIG}: turning off the built-in search would leave invalid "
+                                 f"TOML ({exc}) — file left as it was")
+            if parsed.get("web_search") != "disabled" or parsed.get("apps", {}).get(APP_ID, {}).get("enabled") is not False:
+                raise Unreadable(f"{CODEX_CONFIG}: the built-in search did not come out off — file left as it was")
+        plan.put(CODEX_CONFIG, base, new,
+                 f"built-in web search off: {'; '.join(done)} in {tilde(CODEX_CONFIG)}")
     plan.put(WEB_SEARCH_STATE, read_text(WEB_SEARCH_STATE),
-             f"set previous={current if current is not None else 'absent'}\n", "")
+             "".join(f"{k} previous={v}\n" for k, v in new_state.items()) or None, "")
 
 
 def wire_codex_agents(with_rule, remove, plan):

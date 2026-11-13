@@ -4,7 +4,7 @@
 
 **NEVER native `WebSearch` / `websearch`** — verbose overhead; ddg-search gives the same data in fewer tokens.
 
-**NEVER Codex's built-in web search** — `web.run` with `search_query` / `open` (the `web_search` tool). It is the same kind of native search. The ddg-search installer turns it off (`web_search = "disabled"` in `~/.codex/config.toml`); if it is offered anyway, search and fetch pages through ddg-search all the same.
+**NEVER Codex's built-in web search** — `web.run` with `search_query` / `open`, whether it comes as the `web_search` tool or as the app tool `codex_apps.search_service.web_run`. It is the same kind of native search. The ddg-search installer turns both off (`web_search = "disabled"` and `[apps.connector_openai_search_service] enabled = false` in `~/.codex/config.toml`); if either is offered anyway, search and fetch pages through ddg-search all the same.
 
 **ddg-search tool names differ per IDE — use the one for yours, exactly:**
 
