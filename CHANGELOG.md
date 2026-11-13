@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-11-13
 
-- `.gitignore` carries the ai-gitignore managed block: AI-assistant files and local noise stay out of the repository.
+- The repository is public: https://github.com/vadbosh/ddg-search. Both
+  READMEs clone from that URL.
+- `.gitignore` carries the ai-gitignore managed block: AI-assistant files and
+  local noise stay out of the repository.
 
 ## 0.1.0 — 2026-11-13
 
