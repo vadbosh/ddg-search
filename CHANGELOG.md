@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `.gitignore` carries the ai-gitignore managed block: AI-assistant files and local noise stay out of the repository.
+
 ## 0.1.0 — 2026-11-13
 
 First release. Before it, the ddg-search MCP entry and the rule
