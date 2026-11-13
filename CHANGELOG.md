@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 — 2026-11-13
 
 - The rule tells the model not to open a PDF with `fetch_content`: server
   0.7.0 returns the raw file. One PDF came back as 155 483 characters of
