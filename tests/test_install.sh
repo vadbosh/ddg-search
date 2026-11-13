@@ -115,6 +115,8 @@ check "claude: mcp.json not created when absent" test ! -e "$H/.claude/mcp.json"
 
 T="$H/.codex/config.toml"
 check "codex: pinned spec, one-line args" py "$T" "d['mcp_servers']['ddg-search']['args'][-1] == '$SPEC'"
+check "codex: tools approved, no prompt per call" py "$T" "d['mcp_servers']['ddg-search']['default_tools_approval_mode'] == 'approve'"
+check "codex: approval key written once" test "$(grep -c '^default_tools_approval_mode' "$T")" = 1
 check "codex: extra key of the section kept" py "$T" "d['mcp_servers']['ddg-search']['startup_timeout_sec'] == 20"
 check "codex: other env variable kept, ours gone (auto)" py "$T" "d['mcp_servers']['ddg-search']['env'] == {'DDG_REGION': 'us-en'}"
 check "codex: other sections kept" py "$T" "d['model'] == 'gpt' and d['mcp_servers']['context7'] and d['features']['hooks']"

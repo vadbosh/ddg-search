@@ -77,11 +77,15 @@ MCP-серверов они читают только при старте.
 | Ассистент | Запись сервера | Правило |
 |---|---|---|
 | Claude Code | `~/.claude.json`, ключ `mcpServers`; ещё `~/.claude/mcp.json`, если этот файл есть | `~/.claude/rules/` |
-| Codex | `~/.codex/config.toml`, секция `[mcp_servers.ddg-search]` | `~/.codex/memories/` и строка с `@` в `~/.codex/AGENTS.md` |
+| Codex | `~/.codex/config.toml`, секция `[mcp_servers.ddg-search]`, с `default_tools_approval_mode = "approve"` | `~/.codex/memories/` и строка с `@` в `~/.codex/AGENTS.md` |
 | Opencode | `opencode.json`, ключ `mcp`, с `"codemode": false` | `~/.config/opencode/instructions/`, в списке `instructions` |
 
 С `"codemode": false` Opencode показывает инструменты сервера как обычные:
 `ddg-search_search` и `ddg-search_fetch_content`. Правило называет именно их.
+
+Без `default_tools_approval_mode = "approve"` Codex спрашивает разрешение
+перед каждым поиском и каждой загрузкой страницы. Все три инструмента сервера
+только читают.
 
 У Codex есть собственный инструмент веб-поиска, `web.run`, и по умолчанию он
 включён. Пока он доступен, Codex искал через `web.run`, а не через ddg-search,

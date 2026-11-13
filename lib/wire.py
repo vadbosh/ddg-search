@@ -417,6 +417,8 @@ def codex_section(old_lines, backend, path):
             continue
         key = key_of(ln)
         if where == "main":
+            if key == "default_tools_approval_mode":
+                continue
             if key in ("command", "args", "env"):
                 value = ln.split("=", 1)[1].strip()
                 if key == "env":
@@ -434,9 +436,12 @@ def codex_section(old_lines, backend, path):
                 env_lines.append(ln)
         else:
             subs.append(ln)
+    # Without it Codex asks before every search and every page fetch. All three
+    # tools of the server (search, fetch_content, expand_link) only read.
     out = [f"[mcp_servers.{NAME}]",
            f"command = {toml_str(COMMAND[0])}",
-           "args = [" + ", ".join(toml_str(a) for a in COMMAND[1:]) + "]"] + extra
+           "args = [" + ", ".join(toml_str(a) for a in COMMAND[1:]) + "]",
+           'default_tools_approval_mode = "approve"'] + extra
     env_lines += [f"{k} = {toml_str(v)}" for k, v in env_for(backend).items()]
     if env_lines:
         out += ["", f"[mcp_servers.{NAME}.env]"] + env_lines

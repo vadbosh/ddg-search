@@ -76,12 +76,16 @@ It writes nothing outside `$HOME`.
 | Assistant | Server entry | Rule |
 |---|---|---|
 | Claude Code | `~/.claude.json`, key `mcpServers`; also `~/.claude/mcp.json` if that file exists | `~/.claude/rules/` |
-| Codex | `~/.codex/config.toml`, section `[mcp_servers.ddg-search]` | `~/.codex/memories/`, and an `@` line in `~/.codex/AGENTS.md` |
+| Codex | `~/.codex/config.toml`, section `[mcp_servers.ddg-search]`, with `default_tools_approval_mode = "approve"` | `~/.codex/memories/`, and an `@` line in `~/.codex/AGENTS.md` |
 | Opencode | `opencode.json`, key `mcp`, with `"codemode": false` | `~/.config/opencode/instructions/`, listed in `instructions` |
 
 With `"codemode": false`, Opencode shows the server's tools as ordinary tools:
 `ddg-search_search` and `ddg-search_fetch_content`. The rule uses these
 names.
+
+Without `default_tools_approval_mode = "approve"`, Codex asks for permission
+before every search and every page fetch. All three tools of the server only
+read.
 
 Codex has its own web search tool, `web.run`, and it is on by default. With
 it available, Codex searched through `web.run` and not through ddg-search,

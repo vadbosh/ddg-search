@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Codex: the server entry gets `default_tools_approval_mode = "approve"`.
+  Without it Codex asked for permission before every `search` and every
+  `fetch_content`. All three tools of the server only read. A per-tool
+  `approval_mode` set by hand is kept and still takes precedence.
+
 ## 0.2.0 — 2026-11-13
 
 - Codex: the installer turns off Codex's own web search (`web.run`) with
