@@ -41,7 +41,7 @@ uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0
 ## Установка
 
 ```bash
-git clone <этот репозиторий> ~/src/ddg-search
+git clone https://github.com/vadbosh/ddg-search ~/src/ddg-search
 cd ~/src/ddg-search
 ./install.sh
 ```

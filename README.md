@@ -41,7 +41,7 @@ Without uv, `./install.sh` stops and prints the install command for uv.
 ## Install
 
 ```bash
-git clone <this repository> ~/src/ddg-search
+git clone https://github.com/vadbosh/ddg-search ~/src/ddg-search
 cd ~/src/ddg-search
 ./install.sh
 ```
