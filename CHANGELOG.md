@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 — 2026-11-13
 
 - The server runs with `--ref-url-threshold 0`: search results carry full
   URLs. The default (120 characters) replaced longer ones with `ref://` tokens,
