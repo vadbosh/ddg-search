@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-13
 
 - Codex: the installer turns off Codex's own web search (`web.run`) with
   `web_search = "disabled"` at the top of `~/.codex/config.toml`. That tool is
