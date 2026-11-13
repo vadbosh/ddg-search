@@ -24,7 +24,7 @@ blocked search with the TLS fingerprint of Chrome. This installer always
 installs the extra and pins the server version:
 
 ```
-uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0 --fetch-backend auto
+uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0 --fetch-backend auto --ref-url-threshold 0
 ```
 
 The server version changes only with a release of this repository. It is
@@ -35,6 +35,10 @@ a page with httpx only. With `auto`, it repeats the request through
 `curl_cffi` when the site answers with 403 or a Cloudflare challenge. On
 2026-11-13, `extension.umn.edu` answered httpx with 403 and returned the page
 (2381 characters) to `auto`.
+
+`--ref-url-threshold 0` keeps full URLs in search results. By default the
+server replaces a URL longer than 120 characters with a `ref://` token. The
+model then needs an extra `expand_link` call to see the address.
 
 ## Requirements
 

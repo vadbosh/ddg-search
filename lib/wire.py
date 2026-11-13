@@ -74,7 +74,10 @@ SERVER = f"{PACKAGE}[browser]=={VERSION}"
 # site answers httpx with 403 or a Cloudflare challenge. The server default is
 # httpx alone; measured 2026-11-13, extension.umn.edu gave httpx a 403 and auto
 # the page (2381 characters).
-COMMAND = ["uvx", "--python", PYTHON, SERVER, "--fetch-backend", "auto"]
+# --ref-url-threshold 0: full URLs in search results. The server default (120)
+# replaces a longer URL with a ref:// token, and the model then needs an extra
+# expand_link call to see where a result points: 2 of 30 results on 2026-11-13.
+COMMAND = ["uvx", "--python", PYTHON, SERVER, "--fetch-backend", "auto", "--ref-url-threshold", "0"]
 BACKEND_ENV = "DDG_SEARCH_BACKEND"
 BACKENDS = ("auto", "httpx", "curl")
 

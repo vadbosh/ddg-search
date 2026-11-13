@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- The server runs with `--ref-url-threshold 0`: search results carry full
+  URLs. The default (120 characters) replaced longer ones with `ref://` tokens,
+  and the model needed an extra `expand_link` call to see where a result
+  pointed — 2 of 30 results on 2026-11-13.
+- The rule gains search tactics: the specific term in the query, `site:` for
+  documentation, a narrower second search when the top results are off-topic
+  or one page in several versions.
+
 ## 0.3.1 — 2026-11-13
 
 - The rule tells the model not to open a PDF with `fetch_content`: server

@@ -24,7 +24,7 @@ Extra `[browser]` ставит `curl_cffi`. С ним сервер повтор�
 фиксирует версию сервера:
 
 ```
-uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0 --fetch-backend auto
+uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0 --fetch-backend auto --ref-url-threshold 0
 ```
 
 Версия сервера меняется только с релизом этого репозитория. Она задана
@@ -35,6 +35,10 @@ uvx --python 3.12 duckduckgo-mcp-server[browser]==0.7.0 --fetch-backend auto
 `curl_cffi`, если сайт ответил кодом 403 или проверкой Cloudflare. 2026-11-13
 `extension.umn.edu` ответил httpx кодом 403, а через `auto` отдал страницу
 (2381 знак).
+
+`--ref-url-threshold 0` оставляет в результатах поиска полные адреса. По
+умолчанию сервер заменяет адрес длиннее 120 знаков меткой `ref://`, и модели
+нужен лишний вызов `expand_link`, чтобы увидеть, куда ведёт ссылка.
 
 ## Что нужно
 
