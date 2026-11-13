@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 — 2026-11-13
 
 - README: Python 3.12, when uv has none, is downloaded by `./install.sh`
   together with the server, not on the first start in an assistant. The
