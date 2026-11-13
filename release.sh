@@ -55,10 +55,14 @@ check() {
         if ! cmp -s "$src" "$dst"; then echo "  installed:    $(tilde "$dst") differs from $src — ./install.sh"; stale=1; fi
     done < <(installed)
     [ "$stale" -eq 0 ] && echo "  installed:    $n rule cop(ies), all identical to this checkout"
-    # The backend is whatever the last install chose; --check compares the rest.
+    # The backend and --keep-codex-search are whatever the last install chose;
+    # --check compares the rest.
     for ide in claude codex opencode; do
         backend="$(installed_backend "$ide")"
-        python3 lib/wire.py "$ide" --check --search-backend "$backend" >/dev/null 2>&1; rc=$?
+        keep=()
+        [ "$ide" = codex ] && [ "$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/ddg-search/codex-web-search" 2>/dev/null)" = kept ] \
+            && keep=(--keep-codex-search)
+        python3 lib/wire.py "$ide" --check --search-backend "$backend" ${keep[@]+"${keep[@]}"} >/dev/null 2>&1; rc=$?
         case "$rc" in
             0) echo "  server entry: $ide current" ;;
             3) ;;

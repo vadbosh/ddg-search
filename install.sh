@@ -8,6 +8,7 @@
 #   ./install.sh --search-backend B    auto (default), httpx or curl
 #   ./install.sh --no-server           configuration only: no uv check, no
 #                                      download of the server
+#   ./install.sh --keep-codex-search   leave Codex's built-in web search on
 #
 # What goes where:
 #   the MCP server ddg-search          duckduckgo-mcp-server[browser], pinned,
@@ -15,6 +16,9 @@
 #                                      first start in an assistant is fast
 #   ~/.claude.json  ~/.claude/mcp.json  ~/.codex/config.toml  opencode.json
 #                                      the server entry, wired by lib/wire.py
+#   ~/.codex/config.toml               web_search = "disabled": Codex's own
+#                                      search tool off, so the model uses
+#                                      ddg-search; uninstall.sh restores it
 #   ~/.claude/rules/  ~/.codex/memories/  ~/.config/opencode/instructions/
 #                                      disable-broken-google-search.md, the rule
 #                                      that makes the model search through it
@@ -33,6 +37,7 @@ RULE="disable-broken-google-search.md"
 DRY_RUN=0
 WITH_RULE=1
 WITH_SERVER=1
+KEEP_CODEX_SEARCH=0
 BACKEND="auto"
 ONLY_IDE=""
 
@@ -41,6 +46,7 @@ while [ $# -gt 0 ]; do
         --dry-run)        DRY_RUN=1 ;;
         --no-rule)        WITH_RULE=0 ;;
         --no-server)      WITH_SERVER=0 ;;
+        --keep-codex-search) KEEP_CODEX_SEARCH=1 ;;
         # A bare `shift` past the last argument would end the script silently
         # under set -e; say what is missing instead.
         --ide)            [ $# -ge 2 ] || { echo "--ide needs a value: claude, codex or opencode" >&2; exit 2; }
@@ -138,6 +144,7 @@ for ide in claude codex opencode; do
     args=("$ide" --search-backend "$BACKEND")
     [ "$WITH_RULE" -eq 1 ] || args+=(--no-rule)
     [ "$DRY_RUN" -eq 1 ] && args+=(--dry-run)
+    [ "$ide" = codex ] && [ "$KEEP_CODEX_SEARCH" -eq 1 ] && args+=(--keep-codex-search)
     rc=0
     python3 "$SRC/lib/wire.py" "${args[@]}" || rc=$?
     case "$rc" in 0|3) ;; *) failed=$((failed + 1)) ;; esac

@@ -57,6 +57,7 @@ servers only at start.
 | `--no-rule` | install the MCP server only, without the rule |
 | `--search-backend B` | `auto` (default), `httpx` or `curl` |
 | `--no-server` | write the configuration only; do not check uv, do not download the server |
+| `--keep-codex-search` | leave the built-in web search of Codex on |
 
 `auto` sends a search through httpx first and repeats it through `curl_cffi`
 when DuckDuckGo blocks it. `curl` sends every search through `curl_cffi` at
@@ -81,6 +82,15 @@ It writes nothing outside `$HOME`.
 With `"codemode": false`, Opencode shows the server's tools as ordinary tools:
 `ddg-search_search` and `ddg-search_fetch_content`. The rule uses these
 names.
+
+Codex has its own web search tool, `web.run`, and it is on by default. With
+it available, Codex searched through `web.run` and not through ddg-search,
+although the rule forbids it. So the installer also sets
+`web_search = "disabled"` at the top of `~/.codex/config.toml`. It saves the
+value it replaced in `~/.local/state/ddg-search/codex-web-search`, and
+`./uninstall.sh` puts that value back. To keep the built-in search on, run
+`./install.sh --keep-codex-search`. If ddg-search is disabled in Codex, the
+installer leaves the built-in search on.
 
 The installer owns only the entry named `ddg-search`. In that entry it sets
 the command, the arguments and the variable `DDG_SEARCH_BACKEND`. It keeps all

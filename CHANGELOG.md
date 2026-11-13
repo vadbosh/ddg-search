@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Codex: the installer turns off Codex's own web search (`web.run`) with
+  `web_search = "disabled"` at the top of `~/.codex/config.toml`. That tool is
+  on by default (`cached`), and with it available Codex searched through
+  `web.run` and not through ddg-search. The value it replaced is saved in
+  `~/.local/state/ddg-search/codex-web-search`; `uninstall.sh` and
+  `--keep-codex-search` put it back. A ddg-search disabled in Codex leaves the
+  built-in search on.
+- The rule names Codex's built-in search (`web.run`, `search_query`, `open`)
+  as forbidden, next to `WebSearch`.
+
 ## 0.1.3 — 2026-11-13
 
 Fixes from `review-2026-11-13-installer.md`.

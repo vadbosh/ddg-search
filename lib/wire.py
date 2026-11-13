@@ -16,7 +16,13 @@ script writes only the configuration:
             ~/.claude/mcp-disabled.json
                                       updated instead of mcp.json when the
                                       server is parked there (mcp-tools)
-  codex     ~/.codex/config.toml      [mcp_servers.ddg-search]
+  codex     ~/.codex/config.toml      [mcp_servers.ddg-search], and the
+                                      top-level web_search = "disabled": Codex's
+                                      own search tool (web.run) off, the value
+                                      it replaced kept in
+                                      ~/.local/state/ddg-search/codex-web-search
+                                      for --remove; --keep-codex-search leaves
+                                      it on, and so does a parked server
             ~/.codex/mcp-disabled.toml
                                       updated instead when parked there
             ~/.codex/AGENTS.md        an @-line naming the rule file
@@ -144,15 +150,21 @@ class Plan:
         self.lines = []
 
     def put(self, path, old, new, what):
+        """new None deletes the file."""
         if old == new:
             return
         self.writes[path] = new
-        self.lines.append(what)
+        if what:
+            self.lines.append(what)
 
     def apply(self):
         for path, text in self.writes.items():
             backup(path)
-            atomic_write(path, text)
+            if text is None:
+                if os.path.exists(path):
+                    os.remove(path)
+            else:
+                atomic_write(path, text)
 
 
 # ---------------------------------------------------------------- entries
@@ -517,21 +529,95 @@ def check_codex(text, path, remove):
         raise Unreadable(f"{path}: the edit did not come out as intended — file left as it was")
 
 
-def wire_codex(backend, with_rule, remove, plan):
+def wire_codex(backend, with_rule, remove, plan, keep_search=False):
     if not os.path.isdir(CODEX_DIR):
         return 3
     if remove:
         codex_put(CODEX_CONFIG, backend, True, plan, False)
         codex_put(CODEX_PARKED, backend, True, plan, False)
+        codex_web_search(plan, restore=True)
     else:
         is_parked = codex_lists(CODEX_PARKED)
         if is_parked:
             codex_put(CODEX_PARKED, backend, False, plan, False)
-            plan.lines.append(f"parked in {tilde(CODEX_PARKED)} — {tilde(CODEX_CONFIG)} left alone")
+            plan.lines.append(f"parked in {tilde(CODEX_PARKED)} — {tilde(CODEX_CONFIG)} left alone, "
+                              f"built-in web search too")
         else:
             codex_put(CODEX_CONFIG, backend, False, plan, True)
+            codex_web_search(plan, restore=keep_search, keep=keep_search)
     wire_codex_agents(with_rule, remove, plan)
     return 0
+
+
+# Codex has a search tool of its own (web.run: search_query, open), on by
+# default (web_search = "cached"). With it available the model used it instead
+# of ddg-search, rule or not. The top-level key turns it off; the value it
+# replaced is kept in this file so that --remove and --keep-codex-search can put
+# it back. "kept" records the opt-out, so release.sh knows it is deliberate.
+WEB_SEARCH_STATE = os.path.join(STATE, "codex-web-search")
+WEB_SEARCH_RE = re.compile(r"""^\s*(?:web_search|"web_search"|'web_search')\s*=\s*(.*?)\s*(?:#.*)?$""")
+DISABLED = '"disabled"'
+
+
+def codex_web_search(plan, restore, keep=False):
+    """Set, or restore, the top-level web_search of config.toml."""
+    original = read_text(CODEX_CONFIG)
+    base = plan.writes.get(CODEX_CONFIG, original)
+    if base is None:
+        return
+    lines = base.splitlines()
+    top_end = next((i for i, ln in enumerate(lines) if is_table(ln)), len(lines))
+    at = next((i for i in range(top_end) if WEB_SEARCH_RE.match(lines[i])), None)
+    current = WEB_SEARCH_RE.match(lines[at]).group(1) if at is not None else None
+    state = read_text(WEB_SEARCH_STATE)
+    state = state.strip() if state else None
+
+    if restore:
+        new_state = "kept" if keep else None
+        if state and state.startswith("set previous=") and current == DISABLED:
+            previous = state[len("set previous="):]
+            if previous == "absent":
+                del lines[at]
+            else:
+                lines[at] = f"web_search = {previous}"
+            what = (f"built-in web search: web_search {'restored to ' + previous if previous != 'absent' else 'key removed'} "
+                    f"in {tilde(CODEX_CONFIG)}")
+            plan.put(CODEX_CONFIG, original, "\n".join(lines) + "\n", what)
+        plan.put(WEB_SEARCH_STATE, read_text(WEB_SEARCH_STATE),
+                 None if new_state is None else new_state + "\n", "")
+        if keep:
+            plan.lines.append("built-in web search: left on (--keep-codex-search)")
+        return
+
+    if current == DISABLED:
+        # Already off — by us (state says so) or by the user (no state: then it
+        # stays off after --remove too, as they had it).
+        return
+    new_line = f"web_search = {DISABLED}"
+    if at is not None:
+        lines[at] = new_line
+    else:
+        # The top level ends at the first table; keys after it would belong to it.
+        insert = top_end
+        while insert > 0 and not lines[insert - 1].strip():
+            insert -= 1
+        block = [new_line]
+        if insert == top_end and top_end < len(lines):
+            block.append("")        # right before a table header: keep a blank line between
+        lines[insert:insert] = block
+    new = "\n".join(lines) + "\n"
+    if tomllib is not None:
+        try:
+            if tomllib.loads(new).get("web_search") != "disabled":
+                raise Unreadable(f"{CODEX_CONFIG}: web_search did not come out as \"disabled\" — file left as it was")
+        except tomllib.TOMLDecodeError as exc:
+            raise Unreadable(f"{CODEX_CONFIG}: setting web_search would leave invalid TOML ({exc}) — "
+                             f"file left as it was")
+    plan.put(CODEX_CONFIG, base, new,
+             f"built-in web search: web_search = \"disabled\" in {tilde(CODEX_CONFIG)} "
+             f"(was {current if current is not None else 'unset'})")
+    plan.put(WEB_SEARCH_STATE, read_text(WEB_SEARCH_STATE),
+             f"set previous={current if current is not None else 'absent'}\n", "")
 
 
 def wire_codex_agents(with_rule, remove, plan):
@@ -568,6 +654,8 @@ def main(argv):
     ap.add_argument("--remove", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--check", action="store_true", help="exit 4 when something would change")
+    ap.add_argument("--keep-codex-search", action="store_true",
+                    help="codex: leave the built-in web search on (restores it if an earlier run turned it off)")
     a = ap.parse_args(argv)
 
     plan = Plan()
@@ -577,7 +665,7 @@ def main(argv):
         elif a.ide == "opencode":
             rc = wire_opencode(a.search_backend, not a.no_rule, a.remove, plan)
         else:
-            rc = wire_codex(a.search_backend, not a.no_rule, a.remove, plan)
+            rc = wire_codex(a.search_backend, not a.no_rule, a.remove, plan, a.keep_codex_search)
     except Unreadable as exc:
         print(f"    {exc} — left untouched", file=sys.stderr)
         return 1

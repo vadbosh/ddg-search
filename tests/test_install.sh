@@ -294,6 +294,50 @@ HOME="$H" bash "$SRC/uninstall.sh" --ide > "$TMP/out" 2>&1; rc=$?
 check "uninstall --ide without a value: exit 2" test "$rc" -eq 2
 check "uninstall --help ends on its header" test "$(bash "$SRC/uninstall.sh" --help | tail -1 | cut -c1-3)" != "set"
 
+# ---------------------------------------------------------------- codex built-in web search
+WS="$H/.local/state/ddg-search/codex-web-search"
+fresh
+inst
+check "web search: turned off at the top level" py "$T" "d['web_search'] == 'disabled' and d['model'] == 'gpt'"
+check "web search: state says it was unset" test "$(cat "$WS")" = "set previous=absent"
+check "web search: written before the first table" test "$(grep -n '^web_search' "$T" | cut -d: -f1)" -lt "$(grep -n '^\[' "$T" | head -1 | cut -d: -f1)"
+uninst
+check "web search: uninstall removes the key it added" py "$T" "'web_search' not in d and d['model'] == 'gpt'"
+check "web search: uninstall drops the state" test ! -e "$WS"
+
+fresh
+printf 'web_search = "live"\n%s' "$(cat "$T")" > "$T"
+inst
+check "web search: live → disabled" py "$T" "d['web_search'] == 'disabled'"
+uninst
+check "web search: uninstall puts live back" py "$T" "d['web_search'] == 'live'"
+
+fresh
+printf 'web_search = "disabled"\n%s' "$(cat "$T")" > "$T"
+inst; uninst
+check "web search: off by the user stays off after uninstall" py "$T" "d['web_search'] == 'disabled'"
+
+fresh
+printf 'web_search = "live"\n%s' "$(cat "$T")" > "$T"
+inst --keep-codex-search
+check "web search: --keep-codex-search leaves it on" py "$T" "d['web_search'] == 'live'"
+check "web search: --keep-codex-search is recorded" test "$(cat "$WS")" = "kept"
+inst
+check "web search: a later plain install turns it off" py "$T" "d['web_search'] == 'disabled'"
+inst --keep-codex-search
+check "web search: --keep-codex-search after that restores live" py "$T" "d['web_search'] == 'live'"
+
+fresh
+printf '[features]\nhooks = true\n' > "$T"
+inst
+check "web search: config.toml with tables only — key at the top" py "$T" "d['web_search'] == 'disabled' and d['features']['hooks']"
+
+fresh
+mv "$T" "$H/.codex/mcp-disabled.toml"
+printf 'model = "gpt"\n' > "$T"
+inst
+check "web search: parked ddg-search — built-in search left on" py "$T" "'web_search' not in d"
+
 # ---------------------------------------------------------------- uninstall
 fresh
 inst
@@ -301,7 +345,7 @@ echo "# my note" >> "$H/.claude/rules/$RULE"
 if uninst; then ok "uninstall finishes"; else no "uninstall" "$(tail -5 "$TMP/out")"; fi
 check "uninstall: an edited rule is backed up first (review 2026-11-13 A4)" test "$(grep -l '# my note' "$H"/.local/state/ddg-search/backups/* 2>/dev/null | wc -l | tr -d ' ')" = 1
 check "uninstall: claude entry gone, other kept" py "$C" "'ddg-search' not in d['mcpServers'] and 'other' in d['mcpServers']"
-check "uninstall: codex section gone, rest kept" py "$T" "'ddg-search' not in d['mcp_servers'] and d['features']['hooks']"
+check "uninstall: codex section gone, rest kept" py "$T" "'ddg-search' not in d['mcp_servers'] and d['features']['hooks'] and 'web_search' not in d"
 check "uninstall: opencode entry and rule gone" py "$O" "'ddg-search' not in d['mcp'] and len(d['instructions']) == 1"
 check "uninstall: AGENTS.md line gone" test "$(cat "$H/.codex/AGENTS.md")" = "@/somewhere/other.md"
 check "uninstall: rule files gone" test ! -e "$H/.claude/rules/$RULE" -a ! -e "$H/.codex/memories/$RULE"
