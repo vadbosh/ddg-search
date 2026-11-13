@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The rule tells the model not to open a PDF with `fetch_content`: server
+  0.7.0 returns the raw file. One PDF came back as 155 483 characters of
+  `%PDF-1.6 …` in every parse mode and with every backend (upstream issue
+  [#74](https://github.com/nickclyde/duckduckgo-mcp-server/issues/74)).
+
 ## 0.3.0 — 2026-11-13
 
 - The server runs with `--fetch-backend auto`: `fetch_content` repeats a page

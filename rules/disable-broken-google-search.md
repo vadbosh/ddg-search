@@ -16,6 +16,8 @@
 
 In Opencode the server runs with `codemode: false`, so these are ordinary tools on the native list. A bare `ddg-search` or `search` is not a tool there and fails with `No tool named ...`. If the native list has no `ddg-search_*` (the server is back in Code Mode), call it inside `execute`: `await tools["ddg-search"].search({query: "..."})`.
 
+**Do not open a PDF with `fetch_content`.** It returns the raw file (`%PDF-1.6 …`), not text: one PDF came back as 155 483 characters of binary — every one of them paid for, none of them readable (upstream issue #74). A URL ending in `.pdf`, or a search result marked as a PDF, is a link to give the user or a reason to look for an HTML version of the same document.
+
 **Priority:** 1. ddg-search search 2. ddg-search fetch_content 3. `mcp__context7__query-docs` (lib docs) 4. `mcp__tavily__tavily_search` — disabled; enable via `/mcp-tools` only if ddg returns nothing 5. `WebFetch` (explicit URL only, not search).
 
 No match, no URL → ask user for URL.
