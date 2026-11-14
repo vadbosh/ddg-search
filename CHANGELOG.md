@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 — 2026-11-14
 
 - The rule: "No results" no longer means a block by itself. The server sends
   the same text for a block and for a query that matches nothing. After
