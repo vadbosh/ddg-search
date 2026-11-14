@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.3 — 2026-11-14
 
 - README: an "Important" note right after the introduction says what the
   installer changes in Codex. It turns off the built-in web search and lets
