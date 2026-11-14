@@ -363,6 +363,7 @@ check "web search: parked ddg-search — built-in search left on" py "$T" "'web_
 fresh
 inst
 echo "# my note" >> "$H/.claude/rules/$RULE"
+echo 1700000000.0 > "$H/.local/state/ddg-search/search.lock"    # as a search leaves it
 if uninst; then ok "uninstall finishes"; else no "uninstall" "$(tail -5 "$TMP/out")"; fi
 check "uninstall: an edited rule is backed up first (review 2026-11-13 A4)" test "$(grep -l '# my note' "$H"/.local/state/ddg-search/backups/* 2>/dev/null | wc -l | tr -d ' ')" = 1
 check "uninstall: claude entry gone, other kept" py "$C" "'ddg-search' not in d['mcpServers'] and 'other' in d['mcpServers']"
@@ -370,6 +371,7 @@ check "uninstall: codex section gone, rest kept" py "$T" "'ddg-search' not in d[
 check "uninstall: opencode entry and rule gone" py "$O" "'ddg-search' not in d['mcp'] and len(d['instructions']) == 1"
 check "uninstall: AGENTS.md line gone" test "$(cat "$H/.codex/AGENTS.md")" = "@/somewhere/other.md"
 check "uninstall: throttle gone" test ! -e "$THR"
+check "uninstall: queue lock file gone, backups kept" test ! -e "$H/.local/state/ddg-search/search.lock" -a -d "$H/.local/state/ddg-search/backups"
 check "uninstall: rule files gone" test ! -e "$H/.claude/rules/$RULE" -a ! -e "$H/.codex/memories/$RULE"
 after="$(state)"
 uninst

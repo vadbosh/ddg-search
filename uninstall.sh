@@ -70,3 +70,9 @@ if [ -z "$ONLY_IDE" ] && [ -e "$throttle" ]; then
     if [ "$DRY_RUN" -eq 1 ]; then printf 'would remove %s\n' "$(tilde "$throttle")"
     else rm -f "$throttle"; rmdir "$(dirname "$throttle")" 2>/dev/null || true; printf -- '- %s\n' "$(tilde "$throttle")"; fi
 fi
+# The queue's lock file, shared by every running throttle.py; $STATE itself
+# stays, it holds the backups.
+if [ -z "$ONLY_IDE" ] && [ -e "$STATE/search.lock" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then printf 'would remove %s\n' "$(tilde "$STATE/search.lock")"
+    else rm -f "$STATE/search.lock"; printf -- '- %s\n' "$(tilde "$STATE/search.lock")"; fi
+fi

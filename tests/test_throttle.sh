@@ -14,6 +14,7 @@ QUIET=0
 TMP="$(mktemp -d)"
 trap 'rm -r "$TMP"' EXIT
 export PYTHONDONTWRITEBYTECODE=1
+export DDG_LOCK_FILE="$TMP/search.lock"      # never the real queue of this machine
 
 pass=0
 fail=0
@@ -66,6 +67,36 @@ import sys
 s = [float(l.split()[0]) for l in open(sys.argv[1]) if l.split()[2] == "search"]
 sys.exit(0 if all(b - a >= 0.28 for a, b in zip(s, s[1:])) else 1)
 PY
+
+# Two sessions at once, each with its own throttle and server, as two
+# assistants would run them: the shared lock spaces all six searches. The
+# searches follow initialize after 0.5 s, so that the start-up of a fake
+# server does not delay when its first search is logged.
+started() { requests | head -2; sleep 0.5; requests | tail -n +3; }
+two_sessions() {    # <lock file for the 1st> <lock file for the 2nd>
+    : > "$LOG"
+    started | FAKE_LOG="$LOG" DDG_LOCK_FILE="$1" DDG_MIN_INTERVAL=0.5 python3 "$SRC/lib/throttle.py" python3 "$SRC/tests/fake_server.py" > /dev/null &
+    local first=$!
+    started | FAKE_LOG="$LOG" DDG_LOCK_FILE="$2" DDG_MIN_INTERVAL=0.5 python3 "$SRC/lib/throttle.py" python3 "$SRC/tests/fake_server.py" > /dev/null
+    wait "$first"
+    python3 - "$LOG" <<'PY'
+import sys
+s = sorted(float(l.split()[0]) for l in open(sys.argv[1]) if l.split()[2] == "search")
+print(len(s), min(b - a for a, b in zip(s, s[1:])))
+PY
+}
+read -r count gap < <(two_sessions "$TMP/shared.lock" "$TMP/shared.lock")
+check "two sessions: six searches reached the servers" test "$count" -eq 6
+check "two sessions, one lock: every gap >= 0.5 s (smallest $gap)" python3 -c "import sys; sys.exit(0 if $gap >= 0.49 else 1)"
+check "the lock file holds the time of the last search" python3 -c "import sys,time; sys.exit(0 if 0 < time.time() - float(open('$TMP/shared.lock').read()) < 60 else 1)"
+# The same run with a lock each: the test sees an overlap when there is one.
+read -r count gap < <(two_sessions "$TMP/one.lock" "$TMP/two.lock")
+check "two sessions, separate locks: searches overlap (smallest gap $gap s < 0.3)" python3 -c "import sys; sys.exit(0 if $gap < 0.3 else 1)"
+
+: > "$TMP/notadir"
+requests | FAKE_LOG="$LOG" DDG_LOCK_FILE="$TMP/notadir/search.lock" DDG_MIN_INTERVAL=0 python3 "$SRC/lib/throttle.py" python3 "$SRC/tests/fake_server.py" > "$TMP/out" 2> "$TMP/err"
+check "lock file unusable: every search still answered" test "$(grep -c '"id"' "$TMP/out")" -eq 5
+check "lock file unusable: one line on stderr says so" test "$(grep -c 'within this session only' "$TMP/err")" -eq 1
 
 printf '' | FAKE_LOG="$LOG" FAKE_EXIT=3 python3 "$SRC/lib/throttle.py" python3 "$SRC/tests/fake_server.py" > /dev/null
 check "server exit status passed through (3)" test "$?" -eq 3

@@ -44,6 +44,11 @@ several searches sent at once: a run that started with six parallel searches
 got "No results" for 25 of its 31 searches. Other calls, `fetch_content`
 included, are not delayed.
 
+All the assistant sessions of one user share the queue. Two sessions that
+search at the same time also send one search at a time. Each search
+waits for a lock on `~/.local/state/ddg-search/search.lock`, and that file
+also holds the time of the last search. `uninstall.sh` removes the file.
+
 `--ref-url-threshold 0` keeps full URLs in search results. By default the
 server replaces a URL longer than 120 characters with a `ref://` token. The
 model then needs an extra `expand_link` call to see the address.

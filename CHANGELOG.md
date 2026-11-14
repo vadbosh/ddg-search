@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- The search queue of `lib/throttle.py` is shared by every session of the
+  same user, not only within one session. Each search is sent under a lock on
+  `~/.local/state/ddg-search/search.lock` (`DDG_LOCK_FILE` overrides it), and
+  the file holds the time of the last search. So `DDG_MIN_INTERVAL` counts
+  across sessions too. When the file cannot be opened, the queue works
+  within the session only and says so once on stderr. `uninstall.sh`
+  removes the file.
+
 ## 0.4.1 — 2026-11-14
 
 - The rule: "No results" no longer means a block by itself. The server sends
