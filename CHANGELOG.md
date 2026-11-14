@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 — 2026-11-14
 
 - The search queue of `lib/throttle.py` is shared by every session of the
   same user, not only within one session. Each search is sent under a lock on
