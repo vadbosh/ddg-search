@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- The rule: one search at a time, and stop when blocked. A Codex run that
+  opened with six parallel searches got "No results" — DuckDuckGo's bot block —
+  for 25 of its 31 searches, and kept rephrasing into the block. The server's
+  rate limiter does not prevent this: both strategies allow a burst as large as
+  the per-minute limit (30).
+
 ## 0.3.2 — 2026-11-13
 
 - The server runs with `--ref-url-threshold 0`: search results carry full

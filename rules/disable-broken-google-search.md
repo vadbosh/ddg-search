@@ -23,6 +23,11 @@ In Opencode the server runs with `codemode: false`, so these are ordinary tools 
 - Read the titles first. If the top results are off-topic, or the same page in several versions, search again with the query narrowed — one more word from the question, a `site:`, or quotes around an exact phrase — before fetching anything.
 - A query in Russian is answered with Russian pages; for technical material an English query usually finds the primary source.
 
+**One search at a time, and stop when blocked:**
+
+- Never send several ddg-search searches in parallel. DuckDuckGo blocks a burst: on 2026-11-14 a run that opened with six parallel searches got "No results" for 25 of its 31 searches.
+- "No results were found … DuckDuckGo's bot detection" means **blocked**, not "nothing exists". Do not rephrase and search again at once — each retry is another request into the block. Do other work, or say that search is blocked; the block lifted within about five minutes that time. Then try one search. Still blocked → use `mcp__context7__query-docs` for library docs, or ask the user for a URL.
+
 **Do not open a PDF with `fetch_content`.** It returns the raw file (`%PDF-1.6 …`), not text: one PDF came back as 155 483 characters of binary — every one of them paid for, none of them readable (upstream issue #74). A URL ending in `.pdf`, or a search result marked as a PDF, is a link to give the user or a reason to look for an HTML version of the same document.
 
 **Priority:** 1. ddg-search search 2. ddg-search fetch_content 3. `mcp__context7__query-docs` (lib docs) 4. `mcp__tavily__tavily_search` — disabled; enable via `/mcp-tools` only if ddg returns nothing 5. `WebFetch` (explicit URL only, not search).
