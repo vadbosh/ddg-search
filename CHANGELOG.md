@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-14
 
 - The assistants start the server through `lib/throttle.py`, installed to
   `~/.local/share/ddg-search/`. It sends `search` calls to DuckDuckGo one at a
