@@ -30,6 +30,7 @@ check() { # check NAME COMMAND... — ok when the command succeeds
 }
 
 H="$TMP/home"
+THR="$H/.local/share/ddg-search/throttle.py"
 fresh() {
     [ -d "$H" ] && rm -r "$H"
     mkdir -p "$H/.claude" "$H/.codex" "$H/.config/opencode"
@@ -74,8 +75,8 @@ EOF
 EOF
     printf '@/somewhere/other.md\n' > "$H/.codex/AGENTS.md"
 }
-inst()   { HOME="$H" XDG_STATE_HOME='' bash "$SRC/install.sh" --no-server "$@" > "$TMP/out" 2>&1; }
-uninst() { HOME="$H" XDG_STATE_HOME='' bash "$SRC/uninstall.sh" > "$TMP/out" 2>&1; }
+inst()   { HOME="$H" XDG_STATE_HOME='' XDG_DATA_HOME='' bash "$SRC/install.sh" --no-server "$@" > "$TMP/out" 2>&1; }
+uninst() { HOME="$H" XDG_STATE_HOME='' XDG_DATA_HOME='' bash "$SRC/uninstall.sh" > "$TMP/out" 2>&1; }
 # py FILE EXPR — evaluate EXPR with d = the parsed file (JSON or TOML); exit 1 when falsy.
 # EXPR is always a literal written in this file, never input from elsewhere.
 py() {
@@ -107,14 +108,14 @@ if [ "$first" = "$(state)" ]; then ok "three runs leave the same state"; else no
 check "second run reports nothing to do" grep -q "already current" "$TMP/out"
 
 C="$H/.claude.json"
-check "claude: pinned spec with [browser]" py "$C" "d['mcpServers']['ddg-search']['args'] == ['--python', '3.12', '$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "claude: pinned spec with [browser]" py "$C" "d['mcpServers']['ddg-search']['args'] == ['$THR', 'uvx', '--python', '3.12', '$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 check "claude: other keys of the entry kept (type)" py "$C" "d['mcpServers']['ddg-search']['type'] == 'stdio'"
 check "claude: no env for the auto backend" py "$C" "'env' not in d['mcpServers']['ddg-search']"
 check "claude: other server and top-level key kept" py "$C" "d['mcpServers']['other'] and d['numStartups'] == 7"
 check "claude: mcp.json not created when absent" test ! -e "$H/.claude/mcp.json"
 
 T="$H/.codex/config.toml"
-check "codex: pinned spec, one-line args" py "$T" "d['mcp_servers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "codex: pinned spec, one-line args" py "$T" "d['mcp_servers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 check "codex: tools approved, no prompt per call" py "$T" "d['mcp_servers']['ddg-search']['default_tools_approval_mode'] == 'approve'"
 check "codex: approval key written once" test "$(grep -c '^default_tools_approval_mode' "$T")" = 1
 check "codex: extra key of the section kept" py "$T" "d['mcp_servers']['ddg-search']['startup_timeout_sec'] == 20"
@@ -124,10 +125,11 @@ check "codex: AGENTS.md references the rule once" test "$(grep -c "memories/$RUL
 check "codex: AGENTS.md keeps its other line" grep -q '^@/somewhere/other.md$' "$H/.codex/AGENTS.md"
 
 O="$H/.config/opencode/opencode.json"
-check "opencode: local server, codemode off" py "$O" "d['mcp']['ddg-search'] == {'type': 'local', 'command': ['uvx', '--python', '3.12', '$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0'], 'codemode': False}"
+check "opencode: local server, codemode off" py "$O" "d['mcp']['ddg-search'] == {'type': 'local', 'command': ['python3', '$THR', 'uvx', '--python', '3.12', '$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0'], 'codemode': False}"
 check "opencode: other server kept" py "$O" "d['mcp']['other']['command'] == ['other-server']"
 check "opencode: rule listed after the existing one" py "$O" "d['instructions'] == ['~/.config/opencode/instructions/other.md', '~/.config/opencode/instructions/$RULE']"
 
+check "throttle installed" cmp -s "$SRC/lib/throttle.py" "$THR"
 for f in .claude/rules .codex/memories .config/opencode/instructions; do
     check "rule installed: $f" cmp -s "$SRC/rules/$RULE" "$H/$f/$RULE"
 done
@@ -147,14 +149,14 @@ check "back to auto: codex env back to the other variable" py "$T" "d['mcp_serve
 fresh
 printf '{"mcpServers": {"ddg-search": {"command": "uvx", "args": ["duckduckgo-mcp-server[browser]"]}}}\n' > "$H/.claude/mcp.json"
 inst
-check "mcp.json present: entry updated there" py "$H/.claude/mcp.json" "d['mcpServers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "mcp.json present: entry updated there" py "$H/.claude/mcp.json" "d['mcpServers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 
 fresh
 printf '{"mcpServers": {"x": {"command": "x"}}}\n' > "$H/.claude/mcp.json"
 printf '{"mcpServers": {"ddg-search": {"command": "uvx", "args": ["old"]}}}\n' > "$H/.claude/mcp-disabled.json"
 before="$(cat "$C")"
 inst
-check "claude parked: updated in mcp-disabled.json" py "$H/.claude/mcp-disabled.json" "d['mcpServers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "claude parked: updated in mcp-disabled.json" py "$H/.claude/mcp-disabled.json" "d['mcpServers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 check "claude parked: not added to mcp.json" py "$H/.claude/mcp.json" "'ddg-search' not in d['mcpServers']"
 check "claude parked: ~/.claude.json untouched" test "$before" = "$(cat "$C")"
 check "claude parked: said so" grep -q "parked in" "$TMP/out"
@@ -163,7 +165,7 @@ fresh
 mv "$T" "$H/.codex/mcp-disabled.toml"
 printf 'model = "gpt"\n' > "$T"
 inst
-check "codex parked: updated in mcp-disabled.toml" py "$H/.codex/mcp-disabled.toml" "d['mcp_servers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "codex parked: updated in mcp-disabled.toml" py "$H/.codex/mcp-disabled.toml" "d['mcp_servers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 check "codex parked: not added to config.toml" py "$T" "'mcp_servers' not in d"
 
 fresh
@@ -186,7 +188,7 @@ fresh
 inst --no-rule
 check "--no-rule: no rule file" test ! -e "$H/.claude/rules/$RULE"
 check "--no-rule: no instructions entry" py "$O" "len(d['instructions']) == 1"
-check "--no-rule: server still wired" py "$C" "d['mcpServers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "--no-rule: server still wired" py "$C" "d['mcpServers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 
 fresh
 rm -r "$H/.codex"
@@ -197,15 +199,15 @@ check "assistant missing: reported" grep -q "codex: not installed here" "$TMP/ou
 fresh
 rm "$C" "$T" "$O"
 inst
-check "no config files yet: claude.json created" py "$C" "d['mcpServers']['ddg-search']['command'] == 'uvx'"
-check "no config files yet: config.toml created" py "$T" "d['mcp_servers']['ddg-search']['command'] == 'uvx'"
+check "no config files yet: claude.json created" py "$C" "d['mcpServers']['ddg-search']['command'] == 'python3'"
+check "no config files yet: config.toml created" py "$T" "d['mcp_servers']['ddg-search']['command'] == 'python3'"
 check "no config files yet: opencode.json created" py "$O" "d['mcp']['ddg-search']['type'] == 'local'"
 
 fresh
 printf '{ broken' > "$O"
 if inst; then no "broken opencode.json fails the run" "exit 0"; else ok "broken opencode.json fails the run"; fi
 check "broken opencode.json left untouched" test "$(cat "$O")" = "{ broken"
-check "others still wired despite one failure" py "$C" "d['mcpServers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "others still wired despite one failure" py "$C" "d['mcpServers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 
 # A PATH with python3 and the base tools but no uv: python3 may live in
 # /usr/local/bin (python images), which /usr/bin:/bin alone would hide too.
@@ -235,12 +237,12 @@ codex_shape() { fresh; printf '%b' "$2" > "$T"; inst "${@:3}"; }
 one_table="len([l for l in open('$T') if l.strip().startswith('[mcp_servers') and 'ddg-search' in l and '.env' not in l]) == 1"
 
 codex_shape T1 '[mcp_servers.ddg-search] # search\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\n'
-check "codex: header with a comment — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "codex: header with a comment — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 check "codex: header with a comment — one table" python3 -c "import sys; sys.exit(0 if $one_table else 1)"
 codex_shape T2 '[mcp_servers.ddg-search]\n"command" = "uvx"\n"args" = ["duckduckgo-mcp-server"]\n'
-check "codex: quoted keys — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "codex: quoted keys — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 codex_shape T6 '[ mcp_servers . "ddg-search" ]\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\n'
-check "codex: spaces and quotes in the header — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "codex: spaces and quotes in the header — valid, pinned" py "$T" "d['mcp_servers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 codex_shape T3 '[mcp_servers.ddg-search]\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\nenv = { DDG_REGION = "us-en" }\n'
 check "codex: inline env kept" py "$T" "d['mcp_servers']['ddg-search']['env'] == {'DDG_REGION': 'us-en'}"
 codex_shape T3c '[mcp_servers.ddg-search]\ncommand = "uvx"\nargs = ["duckduckgo-mcp-server"]\nenv = { DDG_REGION = "us-en", DDG_SEARCH_BACKEND = "httpx" }\n' --search-backend curl
@@ -252,7 +254,7 @@ codex_shape T4 "$T4"; rc=$?
 check "codex: inline table — refused" test "$rc" -ne 0
 check "codex: inline table — file unchanged" test "$(cat "$T")" = "$(printf '%b' "$T4")"
 check "codex: inline table — says why" grep -q "inline" "$TMP/out"
-check "codex: inline table — other assistants still wired" py "$C" "d['mcpServers']['ddg-search']['args'][2:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
+check "codex: inline table — other assistants still wired" py "$C" "d['mcpServers']['ddg-search']['args'][4:] == ['$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']"
 fresh
 printf '[mcp_servers.ddg-search] # search\ncommand = "uvx"\n\n[features]\nhooks = true\n' > "$T"
 uninst
@@ -264,7 +266,7 @@ check "codex: top-level dotted key — file unchanged" test "$(cat "$T")" = "$(p
 fresh
 printf '[features]\nddg-search = true\n' > "$T"
 inst
-check "codex: ddg-search as a key of another table is not the server" py "$T" "d['features']['ddg-search'] is True and d['mcp_servers']['ddg-search']['command'] == 'uvx'"
+check "codex: ddg-search as a key of another table is not the server" py "$T" "d['features']['ddg-search'] is True and d['mcp_servers']['ddg-search']['command'] == 'python3'"
 # Without tomllib (Python 3.8–3.10) there is no parser to say a file is broken.
 if python3 -c 'import tomllib' 2>/dev/null; then
     fresh
@@ -283,7 +285,7 @@ d = json.load(open(sys.argv[1])); d["mcp"]["ddg-search"] = {"type": "remote", "u
 open(sys.argv[1], "w").write(json.dumps(d))
 PY
 inst
-check "claude: a remote entry becomes a local one" py "$C" "d['mcpServers']['ddg-search'] == {'command': 'uvx', 'args': ['--python', '3.12', '$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']}"
+check "claude: a remote entry becomes a local one" py "$C" "d['mcpServers']['ddg-search'] == {'command': 'python3', 'args': ['$THR', 'uvx', '--python', '3.12', '$SPEC', '--fetch-backend', 'auto', '--ref-url-threshold', '0']}"
 check "opencode: a remote entry becomes a local one" py "$O" "'url' not in d['mcp']['ddg-search'] and d['mcp']['ddg-search']['type'] == 'local'"
 
 # ---------------------------------------------------------------- flags (review 2026-11-13 A5, B2)
@@ -367,6 +369,7 @@ check "uninstall: claude entry gone, other kept" py "$C" "'ddg-search' not in d[
 check "uninstall: codex section gone, rest kept" py "$T" "'ddg-search' not in d['mcp_servers'] and d['features']['hooks'] and 'web_search' not in d"
 check "uninstall: opencode entry and rule gone" py "$O" "'ddg-search' not in d['mcp'] and len(d['instructions']) == 1"
 check "uninstall: AGENTS.md line gone" test "$(cat "$H/.codex/AGENTS.md")" = "@/somewhere/other.md"
+check "uninstall: throttle gone" test ! -e "$THR"
 check "uninstall: rule files gone" test ! -e "$H/.claude/rules/$RULE" -a ! -e "$H/.codex/memories/$RULE"
 after="$(state)"
 uninst

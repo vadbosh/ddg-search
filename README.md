@@ -36,6 +36,14 @@ a page with httpx only. With `auto`, it repeats the request through
 2026-11-13, `extension.umn.edu` answered httpx with 403 and returned the page
 (2381 characters) to `auto`.
 
+The assistants do not start this command directly. They start
+`python3 ~/.local/share/ddg-search/throttle.py` with the command as its
+arguments. The throttle sends `search` calls to DuckDuckGo one at a time, at
+least `DDG_MIN_INTERVAL` seconds apart (2 by default). DuckDuckGo blocks
+several searches sent at once: a run that started with six parallel searches
+got "No results" for 25 of its 31 searches. Other calls, `fetch_content`
+included, are not delayed.
+
 `--ref-url-threshold 0` keeps full URLs in search results. By default the
 server replaces a URL longer than 120 characters with a `ref://` token. The
 model then needs an extra `expand_link` call to see the address.
@@ -153,13 +161,14 @@ If the rule was edited by hand, the script first copies it to
 ```bash
 bash tests/test_install.sh   # a temporary HOME; the real configuration is not touched
 bash tests/test_update.sh    # update.sh on a copy of the checkout, PyPI replaced by a file
-bash tests/docker.sh         # in Docker: both suites under bash 3.2 and Python 3.10, then a real install
+bash tests/test_throttle.sh  # throttle.py against a fake server: one search at a time
+bash tests/docker.sh         # in Docker: the suites under bash 3.2 and Python 3.10, then a real install
 ```
 
 `tests/docker.sh` has three stages:
 
-- `unit`: runs both suites under bash 3.2, the version macOS ships.
-- `py310`: runs both suites under Python 3.10, which has no `tomllib`.
+- `unit`: runs the suites under bash 3.2, the version macOS ships.
+- `py310`: runs the suites under Python 3.10, which has no `tomllib`.
   There the installer edits `config.toml` without a parser.
 - `e2e`: on a clean Debian, installs the server and starts it from the entry
   of each assistant. Then it runs one search through MCP and checks that the

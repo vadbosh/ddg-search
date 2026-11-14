@@ -63,3 +63,10 @@ for ide in claude codex opencode; do
     case "$rc" in 0|3) ;; *) failed=$((failed + 1)) ;; esac
 done
 [ "$failed" -eq 0 ] || { echo "$failed assistant(s) not cleaned — see above" >&2; exit 1; }
+
+# The throttle serves every assistant: it goes only when all of them are cleaned.
+throttle="$(python3 "$SRC/lib/wire.py" throttle)"
+if [ -z "$ONLY_IDE" ] && [ -e "$throttle" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then printf 'would remove %s\n' "$(tilde "$throttle")"
+    else rm -f "$throttle"; rmdir "$(dirname "$throttle")" 2>/dev/null || true; printf -- '- %s\n' "$(tilde "$throttle")"; fi
+fi

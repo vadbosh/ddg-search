@@ -14,6 +14,10 @@
 #   the MCP server ddg-search          duckduckgo-mcp-server[browser], pinned,
 #                                      run by uvx; downloaded once here so the
 #                                      first start in an assistant is fast
+#   ~/.local/share/ddg-search/throttle.py
+#                                      sits between the assistant and the
+#                                      server; searches go to DuckDuckGo one at
+#                                      a time, DDG_MIN_INTERVAL (2 s) apart
 #   ~/.claude.json  ~/.claude/mcp.json  ~/.codex/config.toml  opencode.json
 #                                      the server entry, wired by lib/wire.py
 #   ~/.codex/config.toml               web_search = "disabled": Codex's own
@@ -114,7 +118,7 @@ if [ "$WITH_SERVER" -eq 1 ]; then
         # 3.12 into uv's cache. --help starts the server's argument parser and
         # exits, so this also proves the command the assistants will run.
         # shellcheck disable=SC2046
-        if out="$(uvx $(python3 "$SRC/lib/wire.py" spec | sed -n '2,$p') --help 2>&1)"; then
+        if out="$($(python3 "$SRC/lib/wire.py" server) --help 2>&1)"; then
             say "    = ready ($(uvx --version 2>/dev/null))"
         else
             bad "    uvx could not start the server:"
@@ -123,6 +127,11 @@ if [ "$WITH_SERVER" -eq 1 ]; then
         fi
     fi
 fi
+
+# ---------------------------------------------------------------- throttle
+# Every assistant starts the server through it, so it is installed first.
+say "throttle:"
+install_file "$SRC/lib/throttle.py" "$(python3 "$SRC/lib/wire.py" throttle)"
 
 # ---------------------------------------------------------------- assistants
 found=0

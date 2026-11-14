@@ -77,12 +77,18 @@ SERVER = f"{PACKAGE}[browser]=={VERSION}"
 # --ref-url-threshold 0: full URLs in search results. The server default (120)
 # replaces a longer URL with a ref:// token, and the model then needs an extra
 # expand_link call to see where a result points: 2 of 30 results on 2026-11-13.
-COMMAND = ["uvx", "--python", PYTHON, SERVER, "--fetch-backend", "auto", "--ref-url-threshold", "0"]
+SERVER_COMMAND = ["uvx", "--python", PYTHON, SERVER, "--fetch-backend", "auto", "--ref-url-threshold", "0"]
 BACKEND_ENV = "DDG_SEARCH_BACKEND"
 BACKENDS = ("auto", "httpx", "curl")
 
 HOME = os.path.expanduser("~")
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.join(HOME, ".local", "state"), "ddg-search")
+# The assistants start the server through lib/throttle.py, installed here: it
+# sends searches to DuckDuckGo one at a time (see its docstring). The path is
+# absolute because no assistant expands ~ in a command.
+SHARE = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(HOME, ".local", "share"), "ddg-search")
+THROTTLE = os.path.join(SHARE, "throttle.py")
+COMMAND = ["python3", THROTTLE] + SERVER_COMMAND
 BACKUPS = os.path.join(STATE, "backups")
 
 CLAUDE_JSON = os.path.join(HOME, ".claude.json")
@@ -735,6 +741,12 @@ def tilde(path):
 
 
 def main(argv):
+    if argv[:1] == ["server"]:
+        print("\n".join(SERVER_COMMAND))
+        return 0
+    if argv[:1] == ["throttle"]:
+        print(THROTTLE)
+        return 0
     if argv[:1] == ["package"]:
         print(SERVER)
         return 0

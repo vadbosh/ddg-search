@@ -2,11 +2,18 @@
 
 ## Unreleased
 
-- The rule: one search at a time, and stop when blocked. A Codex run that
-  opened with six parallel searches got "No results" — DuckDuckGo's bot block —
-  for 25 of its 31 searches, and kept rephrasing into the block. The server's
-  rate limiter does not prevent this: both strategies allow a burst as large as
-  the per-minute limit (30).
+- The assistants start the server through `lib/throttle.py`, installed to
+  `~/.local/share/ddg-search/`. It sends `search` calls to DuckDuckGo one at a
+  time, at least `DDG_MIN_INTERVAL` seconds apart (default 2); everything else,
+  `fetch_content` included, passes at once. A Codex run that opened with six
+  parallel searches got "No results" — DuckDuckGo's bot block — for 25 of its
+  31 searches. The server's own rate limiter does not prevent this: both
+  strategies allow a burst as large as the per-minute limit (30).
+- The rule: one search at a time; on a block, say so and go on without web
+  search — do not retry and do not wait. With an earlier wording that allowed
+  a pause, both Codex and Claude sat idle until their time ran out.
+- New suite `tests/test_throttle.sh`, also run by the Docker `unit` and
+  `py310` stages.
 
 ## 0.3.2 — 2026-11-13
 

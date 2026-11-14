@@ -27,6 +27,7 @@ installed() {
 rules/$RULE $HOME/.claude/rules/$RULE
 rules/$RULE $HOME/.codex/memories/$RULE
 rules/$RULE $HOME/.config/opencode/instructions/$RULE
+lib/throttle.py $(python3 lib/wire.py throttle)
 EOF
 }
 
@@ -54,7 +55,7 @@ check() {
         n=$((n + 1))
         if ! cmp -s "$src" "$dst"; then echo "  installed:    $(tilde "$dst") differs from $src — ./install.sh"; stale=1; fi
     done < <(installed)
-    [ "$stale" -eq 0 ] && echo "  installed:    $n rule cop(ies), all identical to this checkout"
+    [ "$stale" -eq 0 ] && echo "  installed:    $n cop(ies), all identical to this checkout"
     # The backend and --keep-codex-search are whatever the last install chose;
     # --check compares the rest.
     for ide in claude codex opencode; do
