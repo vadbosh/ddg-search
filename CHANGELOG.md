@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- The rule: "No results" no longer means a block by itself. The server sends
+  the same text for a block and for a query that matches nothing. After
+  "No results" on a narrow query (quotes, `site:`), the model runs one broader
+  search, and treats it as a block only if that search also returns nothing.
+  On 2026-11-14 a Codex run stopped after two searches, although the IP was
+  not blocked. Its second search was a quoted query with no matches. Five of
+  its six topics were left unsearched.
+
 ## 0.4.0 — 2026-11-14
 
 - The assistants start the server through `lib/throttle.py`, installed to
