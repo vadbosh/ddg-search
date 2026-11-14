@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- README: an "Important" note right after the introduction says what the
+  installer changes in Codex. It turns off the built-in web search and lets
+  Codex call the ddg-search tools without asking. The note also says how to
+  undo it.
+
 ## 0.4.2 — 2026-11-14
 
 - The search queue of `lib/throttle.py` is shared by every session of the

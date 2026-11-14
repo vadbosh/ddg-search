@@ -8,6 +8,19 @@ built-in search tools.
 
 [Русская версия](README.RU.md)
 
+> [!IMPORTANT]
+> In Codex, the installer turns off the built-in web search. In
+> `~/.codex/config.toml` it sets `web_search = "disabled"` and turns off the
+> app `connector_openai_search_service`. Codex then searches only through
+> ddg-search. The installer also lets Codex call the tools of ddg-search
+> without asking for permission (`default_tools_approval_mode = "approve"`).
+> All three tools only read.
+>
+> `./uninstall.sh` puts the previous search settings back and removes the
+> ddg-search entry together with its permission. To keep the built-in search
+> on, install with `./install.sh --keep-codex-search`. Details are in
+> [What goes where](#what-goes-where).
+
 ## Why the [browser] extra
 
 DuckDuckGo checks the TLS fingerprint of the client. The server's default HTTP
