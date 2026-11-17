@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- README: the proxy has its own section, "Why searches go through a proxy".
+  It moves out of the `[browser]` section and adds what was missing: the
+  measured margin of the 2-second interval, the 120-second limit on a search,
+  what happens to a cancelled search, and the options that were not chosen
+  (the server's own limit, the rule alone, a patch to the server, a separate
+  queue process).
+
 ## 0.4.4 — 2026-11-17
 
 - `throttle.py` handles a cancelled search. The server does not answer a

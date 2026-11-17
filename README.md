@@ -49,22 +49,44 @@ a page with httpx only. With `auto`, it repeats the request through
 2026-11-13, `extension.umn.edu` answered httpx with 403 and returned the page
 (2381 characters) to `auto`.
 
-The assistants do not start this command directly. They start
-`python3 ~/.local/share/ddg-search/throttle.py` with the command as its
-arguments. The throttle sends `search` calls to DuckDuckGo one at a time, at
-least `DDG_MIN_INTERVAL` seconds apart (2 by default). DuckDuckGo blocks
-several searches sent at once: a run that started with six parallel searches
-got "No results" for 25 of its 31 searches. Other calls, `fetch_content`
-included, are not delayed.
-
-All the assistant sessions of one user share the queue. Two sessions that
-search at the same time also send one search at a time. Each search
-waits for a lock on `~/.local/state/ddg-search/search.lock`, and that file
-also holds the time of the last search. `uninstall.sh` removes the file.
-
 `--ref-url-threshold 0` keeps full URLs in search results. By default the
 server replaces a URL longer than 120 characters with a `ref://` token. The
 model then needs an extra `expand_link` call to see the address.
+
+## Why searches go through a proxy
+
+The assistants do not start the server command directly. They start
+`python3 ~/.local/share/ddg-search/throttle.py` with the command as its
+arguments. This proxy sends `search` calls to DuckDuckGo one at a time, at
+least `DDG_MIN_INTERVAL` seconds apart (2 by default). Other calls,
+`fetch_content` included, are not delayed.
+
+DuckDuckGo blocks several searches sent at once. On 2026-11-14, a run that
+started with six parallel searches got "No results" for 25 of its 31
+searches. Searches sent one at a time were not blocked. Thirty of them in a
+row got no refusal, even with no pause between them, at up to about 80 a
+minute. So the 2 seconds are a margin. A model rarely waits for them: in the
+measured runs, it sent a search every 7–10 seconds.
+
+All the assistant sessions of one user share the queue. Two sessions that
+search at the same time also send one search at a time. Each search takes a
+lock on `~/.local/state/ddg-search/search.lock` and keeps it until the server
+answers, or for 120 seconds at most. The file also holds the time of the last
+search. `uninstall.sh` removes the file.
+
+The server does not answer a search that the assistant cancelled. So a
+cancelled search that was already sent gives up the queue at once, and one
+that is still queued is never sent. The cancel itself still goes to the
+server.
+
+Other ways to space the searches, and why this repository does not use them:
+
+| Option | Why not |
+|---|---|
+| The server's own limit, `DDG_SEARCH_RPM` with `DDG_RATE_LIMIT_STRATEGY` | Both strategies, `sliding` and `token_bucket`, let through a burst as large as the per-minute limit: 30 searches by default. |
+| The rule alone, which asks the model to search one at a time | A model can still send several searches in one step. The rule is advice; the proxy is a guarantee. |
+| A patch to the server | The server is upstream code, and this repository does not change it. |
+| A separate queue process for all sessions | It is one more process to start and stop. The kernel releases the lock when the session that holds it dies, so a crashed session does not block the others. |
 
 ## Requirements
 
