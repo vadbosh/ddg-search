@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.6 — 2026-11-17
 
 - README: says what httpx and `curl_cffi` are and who installs them. Both
   are HTTP clients that `uvx` installs with the server into its own
