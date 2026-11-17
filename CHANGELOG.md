@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- `throttle.py` handles a cancelled search. The server does not answer a
+  call that the client cancelled. The relay used to wait 120 s for that
+  answer, and it held the queue of every session all that time. On
+  2026-11-17 the next search waited 115–123 s, in the same session and in
+  another one. Now a cancelled search that was already sent ends its turn at
+  once, and one still in the queue is never sent. The cancel itself still
+  goes to the server.
+- `throttle.py` keeps serving searches after an unusual message. Each of
+  these used to end a thread of the relay, so every later search of the
+  session hung:
+  - a second search with an id that is still queued now gets a JSON-RPC
+    error;
+  - `tools/call` with array `params` is now passed on;
+  - `DDG_MIN_INTERVAL=inf` now falls back to 2 s.
+- Audit reports (`review-*.md`) are no longer kept in the repository:
+  `review-2026-11-13-installer.md` was removed, and `.gitignore` now lists
+  `/review-*.md`.
+
 ## 0.4.3 — 2026-11-14
 
 - README: an "Important" note right after the introduction says what the

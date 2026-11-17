@@ -10,6 +10,11 @@ previous search has been answered and at least DDG_MIN_INTERVAL seconds
 initialize, tools/list, fetch_content, notifications, replies — goes through
 at once.
 
+A cancelled search (notifications/cancelled, passed on to the server as
+well) is dropped from the queue if it has not been sent yet. If it has been
+sent, its turn ends at once: the server does not answer a cancelled call, and
+waiting for that answer would hold every session's queue.
+
 The queue is shared by every throttle.py of the same user, not only within
 one assistant session: each search is sent under an exclusive flock(2) on
 DDG_LOCK_FILE (default ~/.local/state/ddg-search/search.lock), held until the
@@ -30,6 +35,7 @@ Standard library only, Python 3.8 or newer. Exit status is the server's.
 """
 import contextlib
 import json
+import math
 import os
 import queue
 import subprocess
@@ -47,9 +53,11 @@ TOOL = "search"
 
 def interval():
     try:
-        return max(0.0, float(os.environ.get("DDG_MIN_INTERVAL", "2")))
+        value = float(os.environ.get("DDG_MIN_INTERVAL", "2"))
     except ValueError:
         return 2.0
+    # inf would make time.sleep() raise and stop every later search.
+    return max(0.0, value) if math.isfinite(value) else 2.0
 
 
 def lock_path():
@@ -81,6 +89,8 @@ class Relay:
         self.searches = queue.Queue()
         self.answered = {}                   # request id of a queued search -> Event
         self.answered_lock = threading.Lock()
+        self.in_flight = None                # key of the search sent and not yet answered
+        self.cancelled = set()               # keys of queued searches the client cancelled
         self.min_interval = interval()
         self.lock = open_lock()
         self.last_sent = 0.0                 # time.time() of our last search
@@ -98,25 +108,67 @@ class Relay:
         """Read requests from the assistant. Searches go to the queue."""
         stdin = sys.stdin.buffer
         for raw in iter(stdin.readline, b""):
-            if self.is_search(raw):
+            try:
+                where = self.route(raw)
+            except Exception as exc:         # one odd message must not stop the relay
+                print(f"throttle.py: passed on unqueued: {exc!r}", file=sys.stderr)
+                where = "child"
+            if where == "queue":
                 self.searches.put(raw)
-            else:
+            elif where == "child":
                 self.to_child(raw)
         self.searches.put(None)              # EOF: let the worker drain and stop
 
-    def is_search(self, raw):
+    def route(self, raw):
+        """'queue' for a search, 'child' for everything to pass on, 'answered'
+        for a message this relay has already answered itself."""
         try:
             msg = json.loads(raw)
         except ValueError:
-            return False
-        if not isinstance(msg, dict) or msg.get("method") != "tools/call" or "id" not in msg:
-            return False
-        params = msg.get("params") or {}
-        if params.get("name") != TOOL:
-            return False
+            return "child"
+        if not isinstance(msg, dict):
+            return "child"
+        if msg.get("method") == "notifications/cancelled":
+            self.cancel(msg.get("params"))
+            return "child"
+        if msg.get("method") != "tools/call" or "id" not in msg:
+            return "child"
+        params = msg.get("params")
+        if not isinstance(params, dict) or params.get("name") != TOOL:
+            return "child"
+        key = json.dumps(msg["id"])
         with self.answered_lock:
-            self.answered[json.dumps(msg["id"])] = threading.Event()
-        return True
+            duplicate = key in self.answered
+            if not duplicate:
+                self.answered[key] = threading.Event()
+        if duplicate:
+            # JSON-RPC forbids two outstanding requests with one id; queueing
+            # the second would leave one of them without its Event.
+            self.reply_error(msg["id"], "throttle.py: a search with this id is already queued")
+            return "answered"
+        return "queue"
+
+    def cancel(self, params):
+        """The client cancelled a request. The server does not answer a
+        cancelled call, so a search in flight must not wait for its reply,
+        and a queued one is never sent."""
+        if not isinstance(params, dict) or "requestId" not in params:
+            return
+        key = json.dumps(params["requestId"])
+        with self.answered_lock:
+            done = self.answered.get(key)
+            if done is None:
+                return
+            if key == self.in_flight:
+                done.set()
+            else:
+                self.cancelled.add(key)
+
+    def reply_error(self, msg_id, text):
+        reply = {"jsonrpc": "2.0", "id": msg_id, "error": {"code": -32600, "message": text}}
+        with self.out_lock:
+            sys.stdout.buffer.write(json.dumps(reply).encode() + b"\n")
+            sys.stdout.buffer.flush()
 
     @contextlib.contextmanager
     def turn(self):
@@ -150,22 +202,39 @@ class Relay:
             if self.lock is not None:
                 fcntl.flock(self.lock, fcntl.LOCK_UN)
 
+    def serve(self, raw):
+        key = json.dumps(json.loads(raw)["id"])
+        try:
+            with self.answered_lock:
+                done = self.answered.get(key)
+                if done is None or key in self.cancelled:
+                    return
+            with self.turn():
+                with self.answered_lock:
+                    if key in self.cancelled:    # cancelled while waiting for the turn
+                        return
+                    self.in_flight = key
+                self.to_child(raw)
+                # The server answers every call it was not asked to cancel;
+                # cancel() ends the wait for a cancelled one. The timeout only
+                # keeps a lost reply from stopping all later searches.
+                done.wait(120)
+        finally:
+            with self.answered_lock:
+                self.in_flight = None
+                self.answered.pop(key, None)
+                self.cancelled.discard(key)
+
     def search_worker(self):
         """One search in flight at a time, spaced by the minimum interval."""
         while True:
             raw = self.searches.get()
             if raw is None:
                 break
-            key = json.dumps(json.loads(raw)["id"])
-            with self.answered_lock:
-                done = self.answered[key]
-            with self.turn():
-                self.to_child(raw)
-                # The server answers every call; the timeout only keeps a lost
-                # reply from stopping all later searches.
-                done.wait(120)
-            with self.answered_lock:
-                self.answered.pop(key, None)
+            try:
+                self.serve(raw)
+            except Exception as exc:         # one search must not stop the queue
+                print(f"throttle.py: search not served: {exc!r}", file=sys.stderr)
         with self.in_lock:
             try:
                 self.child.stdin.close()

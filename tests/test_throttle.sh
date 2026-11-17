@@ -98,6 +98,36 @@ requests | FAKE_LOG="$LOG" DDG_LOCK_FILE="$TMP/notadir/search.lock" DDG_MIN_INTE
 check "lock file unusable: every search still answered" test "$(grep -c '"id"' "$TMP/out")" -eq 5
 check "lock file unusable: one line on stderr says so" test "$(grep -c 'within this session only' "$TMP/err")" -eq 1
 
+# Messages the relay was not written for (review-2026-11-17-throttle.md, A1-A4,
+# C1). Before the fix each of these hung: `timeout` turns a hang into a failure.
+init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+search() { printf '{"jsonrpc":"2.0","id":%s,"method":"tools/call","params":{"name":"search","arguments":{"query":"q"}}}\n' "$1"; }
+cancel() { printf '{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":%s}}\n' "$1"; }
+relay() {   # env assignments… ; requests on stdin; prints the ids answered
+    : > "$LOG"
+    env FAKE_LOG="$LOG" "$@" timeout 20 python3 "$SRC/lib/throttle.py" python3 "$SRC/tests/fake_server.py" > "$TMP/out" 2> "$TMP/err"
+    python3 -c "import json,sys; print(' '.join(sorted(str(json.loads(l)['id']) for l in open(sys.argv[1]) if l.strip())))" "$TMP/out"
+}
+
+# The server never answers a cancelled call; the next search must not wait 120 s.
+start=$(python3 -c 'import time; print(time.time())')
+ids=$( { echo "$init"; search 3; sleep 0.5; cancel 3; search 4; } | relay FAKE_SILENT_IDS=3 DDG_MIN_INTERVAL=0.2)
+took=$(python3 -c "import time; print(round(time.time() - $start, 1))")
+check "cancelled search in flight: the next one answered in $took s, not 120" python3 -c "import sys; sys.exit(0 if '4' in '$ids'.split() and $took < 5 else 1)"
+
+ids=$( { echo "$init"; search 2; search 3; cancel 3; } | relay FAKE_DELAY=0.3 DDG_MIN_INTERVAL=0.5)
+check "cancelled search still queued: never sent to the server" test "$(grep -c ' search 3$' "$LOG")" -eq 0
+
+ids=$( { echo "$init"; search 7; search 7; search 8; } | relay DDG_MIN_INTERVAL=0)
+check "two outstanding searches with one id: later searches still answered ($ids)" test "$ids" = "1 7 7 8"
+check "two outstanding searches with one id: the second gets an error" grep -q 'already queued' "$TMP/out"
+
+ids=$( { echo '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":["x"]}'; echo "$init"; search 2; } | relay DDG_MIN_INTERVAL=0)
+check "tools/call with array params: passed on, the session keeps working ($ids)" test "$ids" = "1 2 9"
+
+ids=$( { echo "$init"; search 2; search 3; } | relay DDG_MIN_INTERVAL=inf)
+check "DDG_MIN_INTERVAL=inf: searches still answered ($ids)" test "$ids" = "1 2 3"
+
 printf '' | FAKE_LOG="$LOG" FAKE_EXIT=3 python3 "$SRC/lib/throttle.py" python3 "$SRC/tests/fake_server.py" > /dev/null
 check "server exit status passed through (3)" test "$?" -eq 3
 python3 "$SRC/lib/throttle.py" /nonexistent/server > /dev/null 2>"$TMP/err" </dev/null

@@ -10,6 +10,8 @@ __pycache__/
 .memsearch/
 .ai-context/
 CLAUDE.local.md
+# Audit reports (the audit skill): work orders for this machine, not docs
+/review-*.md
 
 # >>> ai-gitignore managed block (edit via ai-gitignore skill, not here) >>>
 # Claude Code
