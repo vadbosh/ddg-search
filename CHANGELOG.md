@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.5 — 2026-11-17
 
 - README: the proxy has its own section, "Why searches go through a proxy".
   It moves out of the `[browser]` section and adds what was missing: the
