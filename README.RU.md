@@ -24,7 +24,9 @@
 ## Зачем extra [browser]
 
 DuckDuckGo проверяет TLS-отпечаток клиента. По умолчанию сервер ходит в сеть
-через httpx. Если DuckDuckGo блокирует отпечаток httpx, он отвечает пустой
+через httpx — HTTP-библиотеку для Python, обязательную зависимость сервера.
+`uvx` ставит её вместе с сервером в отдельное окружение, а не в системный
+Python. Если DuckDuckGo блокирует отпечаток httpx, он отвечает пустой
 страницей с кодом HTTP 202, и любой поиск возвращает одно и то же:
 
 ```
@@ -32,7 +34,8 @@ No results were found for your search query. This could be due to DuckDuckGo's
 bot detection or the query returned no matches.
 ```
 
-Extra `[browser]` ставит `curl_cffi`. С ним сервер повторяет заблокированный
+Extra `[browser]` ставит в то же окружение `curl_cffi`, второй HTTP-клиент.
+С ним сервер повторяет заблокированный
 поиск с TLS-отпечатком Chrome. Установщик всегда ставит этот extra и
 фиксирует версию сервера:
 

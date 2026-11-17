@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- README: says what httpx and `curl_cffi` are and who installs them. Both
+  are HTTP clients that `uvx` installs with the server into its own
+  environment, not into the system Python.
+
 ## 0.4.5 — 2026-11-17
 
 - README: the proxy has its own section, "Why searches go through a proxy".

@@ -24,15 +24,18 @@ built-in search tools.
 ## Why the [browser] extra
 
 DuckDuckGo checks the TLS fingerprint of the client. The server's default HTTP
-client is httpx. When DuckDuckGo blocks that fingerprint, it answers with an
-empty HTTP 202 page. Every search then returns this message:
+client is httpx, a Python HTTP library and a required dependency of the
+server. `uvx` installs it with the server into its own environment, not into
+the system Python. When DuckDuckGo blocks the fingerprint of httpx, it answers
+with an empty HTTP 202 page. Every search then returns this message:
 
 ```
 No results were found for your search query. This could be due to DuckDuckGo's
 bot detection or the query returned no matches.
 ```
 
-The `[browser]` extra installs `curl_cffi`. With it, the server repeats a
+The `[browser]` extra installs `curl_cffi`, a second HTTP client, in the same
+environment. With it, the server repeats a
 blocked search with the TLS fingerprint of Chrome. This installer always
 installs the extra and pins the server version:
 
