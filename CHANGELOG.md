@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.4 — 2026-11-17
 
 - `throttle.py` handles a cancelled search. The server does not answer a
   call that the client cancelled. The relay used to wait 120 s for that
