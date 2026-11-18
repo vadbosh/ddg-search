@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.7 — 2026-11-18
 
 - The rule no longer recommends `site:` and quotes, and it limits a query to
   7 words. Through this server, with the IP not blocked, these shapes came
