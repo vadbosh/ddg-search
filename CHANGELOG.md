@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- The rule no longer recommends `site:` and quotes, and it limits a query to
+  7 words. Through this server, with the IP not blocked, these shapes came
+  back "No results" on 2026-11-18. Every control query in between returned
+  results:
+  - quotes: 0 of 5;
+  - `site:`: 0 of 7, on four official domains;
+  - 8 words or more: 0 of 4;
+  - a URL, or a 200-character question: 0.
+
+  With `DDG_SEARCH_BACKEND=curl` a `site:` query did return results. Under
+  `auto` the server switches to `curl_cffi` only on HTTP 202 or 403, not on
+  an empty page. The rule now says to put the domain in as a plain word
+  (`tomllib docs.python.org`).
+- The rule defines the check that tells a block from an empty answer: one
+  search of 2 to 5 common words, not the failed query with its quotes
+  removed. A session had taken an 11-word query without quotes for that
+  check, read its "No results" as a block, and answered from memory.
+
 ## 0.4.6 — 2026-11-17
 
 - README: says what httpx and `curl_cffi` are and who installs them. Both
